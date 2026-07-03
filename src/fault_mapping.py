@@ -292,6 +292,85 @@ def fault_distribution(df: pd.DataFrame, limit: int = 20) -> list[dict[str, Any]
     return [{"fault_normalized": key, "count": int(value)} for key, value in counts.items()]
 
 
+def get_event_by_id(df: pd.DataFrame, event_id: int | str) -> dict[str, Any]:
+    matches = df[df["id"].astype(str) == str(event_id)]
+    if matches.empty:
+        raise ValueError(f"Event id not found: {event_id}")
+    return matches.iloc[0].to_dict()
+
+
+def available_numeric_columns(df: pd.DataFrame) -> list[str]:
+    return [column for column in NUMERIC_COLUMNS if column in df.columns]
+
+
+def find_similar_events(
+    df: pd.DataFrame,
+    event: dict[str, Any],
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Find historical events with similar numeric sensor behavior."""
+    columns = available_numeric_columns(df)
+    if not columns:
+        return {"count": 0, "period": None, "common_faults": [], "examples": []}
+
+    matrix = df[columns].apply(pd.to_numeric, errors="coerce")
+    means = matrix.mean()
+    stds = matrix.std(ddof=0).replace(0, 1)
+    normalized_matrix = ((matrix.fillna(means) - means) / stds).to_numpy(dtype=np.float32)
+
+    event_values = pd.Series({column: event.get(column) for column in columns})
+    event_values = pd.to_numeric(event_values, errors="coerce").fillna(means)
+    normalized_event = ((event_values - means) / stds).to_numpy(dtype=np.float32)
+
+    distances = np.linalg.norm(normalized_matrix - normalized_event, axis=1)
+
+    if "id" in event and "id" in df.columns:
+        same_id = df["id"].astype(str) == str(event["id"])
+        distances[same_id.to_numpy()] = np.inf
+
+    nearest_indices = np.argsort(distances)[:limit]
+    neighbors = df.iloc[nearest_indices].copy()
+    neighbors["similarity_distance"] = distances[nearest_indices]
+
+    created_at = pd.to_datetime(neighbors.get("created_at"), errors="coerce")
+    period = None
+    if created_at.notna().any():
+        period = {
+            "start": created_at.min().isoformat(),
+            "end": created_at.max().isoformat(),
+        }
+
+    common_faults = (
+        neighbors["fault_normalized"]
+        .value_counts()
+        .head(5)
+        .rename_axis("fault_normalized")
+        .reset_index(name="count")
+        .to_dict(orient="records")
+    )
+
+    example_columns = [
+        "id",
+        "created_at",
+        "fault_raw",
+        "fault_normalized",
+        "fault_is_operational_state",
+        "similarity_distance",
+    ]
+    examples = []
+    for row in neighbors[example_columns].to_dict(orient="records"):
+        row["similarity_distance"] = float(row["similarity_distance"])
+        examples.append(row)
+
+    return {
+        "count": int(len(examples)),
+        "period": period,
+        "common_faults": common_faults,
+        "numeric_columns": columns,
+        "examples": examples,
+    }
+
+
 def _confidence(score: float, min_score: float) -> str:
     if score < min_score:
         return "low"
@@ -364,4 +443,3 @@ def map_fault_to_canonical(
         related_documents=canonical.related_documents,
         is_operational_state=False,
     )
-
