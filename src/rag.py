@@ -13,6 +13,7 @@ import requests
 
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_EMBEDDING_MODEL = "qwen3-embedding:4b"
+DEFAULT_LLM_MODEL = "qwen3:8b"
 
 
 @dataclass
@@ -185,6 +186,42 @@ def retrieve_chunks(
         min_score=min_score,
         document_filter=document_filter,
     )
+
+
+def _strip_thinking_blocks(text: str) -> str:
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+
+
+def chat_with_ollama(
+    messages: list[dict[str, str]],
+    model: str = DEFAULT_LLM_MODEL,
+    base_url: str = DEFAULT_OLLAMA_BASE_URL,
+    temperature: float = 0.1,
+    top_p: float = 0.8,
+    num_ctx: int = 8192,
+    timeout: int = 300,
+) -> str:
+    """Generate the final answer with an Ollama chat model."""
+    response = requests.post(
+        f"{base_url.rstrip('/')}/api/chat",
+        json={
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "top_p": top_p,
+                "num_ctx": num_ctx,
+            },
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    data = response.json()
+    content = data.get("message", {}).get("content", "")
+    if not content:
+        raise RuntimeError("Ollama did not return a chat message.")
+    return _strip_thinking_blocks(content)
 
 
 def ollama_health(base_url: str = DEFAULT_OLLAMA_BASE_URL, timeout: int = 5) -> dict[str, Any]:
