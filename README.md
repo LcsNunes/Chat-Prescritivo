@@ -2,7 +2,7 @@
 
 Projeto simples de manutencao prescritiva com IA Generativa, RAG real e modelos locais via Ollama.
 
-O foco desta versao e demonstrar entendimento de arquitetura de IA, embeddings, recuperacao semantica, prompt engineering, guardrails e fluxo de decisao. A interface web e propositalmente simples, usando FastAPI apenas para demonstracao.
+O foco desta versao e demonstrar entendimento de arquitetura de IA, embeddings, recuperacao semantica, prompt engineering, guardrails e fluxo de decisao. A interface web e propositalmente simples e fica separada do backend.
 
 ## Objetivo
 
@@ -34,11 +34,11 @@ uvicorn src.app:app --reload
 
 Acesse:
 
-- Demo simples: `http://127.0.0.1:8000`
+- Frontend demo: `http://127.0.0.1:8000`
 - Swagger: `http://127.0.0.1:8000/docs`
 - Health: `http://127.0.0.1:8000/health`
 
-Exemplo de payload:
+Exemplo de analise por evento:
 
 ```json
 {
@@ -47,6 +47,34 @@ Exemplo de payload:
   "similar_events_limit": 3
 }
 ```
+
+Exemplo de chat em linguagem natural:
+
+```json
+{
+  "question": "falta de fase tem documento?",
+  "top_k_chunks": 3
+}
+```
+
+## Organizacao Frontend/Backend
+
+Backend:
+
+- `src/app.py`: API FastAPI.
+- `src/rag.py`: embeddings, indice vetorial, busca e chamada da LLM.
+- `src/chunking.py`: extracao e chunking de PDFs.
+- `src/fault_mapping.py`: normalizacao de `fault`, mapeamento semantico e busca de eventos similares.
+- `src/guardrails.py`: regras anti-alucinacao.
+- `src/prompts.py`: prompts da analise e do chat.
+
+Frontend:
+
+- `frontend/index.html`
+- `frontend/styles.css`
+- `frontend/app.js`
+
+O backend serve os arquivos estaticos em `/assets`, mas o codigo da interface nao fica misturado ao codigo Python.
 
 ## Fluxo de IA
 
@@ -163,9 +191,40 @@ Endpoints principais:
 
 - `GET /health`
 - `GET /document-report`
+- `GET /documents`
+- `POST /documents`
+- `DELETE /documents/{filename}`
 - `GET /events/{event_id}`
 - `GET /sample-events?fault=cocked_rotor&limit=5`
+- `POST /chat`
 - `POST /analyze`
+
+### `POST /chat`
+
+Endpoint para perguntas em linguagem natural. Ele tenta mapear semanticamente a pergunta para uma classe canonica, recupera documentos relacionados e responde somente com base nos chunks.
+
+Exemplos de perguntas:
+
+- `rotor inclinado tem procedimento?`
+- `qual procedimento para rolamento?`
+- `falta de fase tem documento?`
+- `normal_6 precisa de manutencao?`
+
+### `POST /documents`
+
+Adiciona um novo manual PDF na base documental.
+
+Formato: `multipart/form-data`, campo `file`.
+
+Parametro opcional:
+
+- `overwrite=true`: substitui um PDF existente com o mesmo nome.
+
+Quando um documento e adicionado, o cache em memoria de chunks e indice vetorial e invalidado. O indice sera recriado na proxima consulta.
+
+### `DELETE /documents/{filename}`
+
+Remove um manual PDF obsoleto da base documental e invalida o indice RAG em memoria.
 
 Resposta de `/analyze` inclui:
 
@@ -196,4 +255,3 @@ Resposta de `/analyze` inclui:
 - OCR robusto e pipeline de qualidade documental.
 - Integracao com banco industrial real.
 - Monitoramento de respostas, latencia e cobertura documental em producao.
-
