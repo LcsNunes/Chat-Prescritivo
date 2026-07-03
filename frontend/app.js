@@ -29,6 +29,173 @@ function pretty(value) {
   return JSON.stringify(value, null, 2);
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function markdownToHtml(value) {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function scoreLabel(score) {
+  if (score === null || score === undefined) return "nao informado";
+  return `${(Number(score) * 100).toFixed(1)}%`;
+}
+
+function formatPeriod(period) {
+  if (!period || !period.start || !period.end) return "sem periodo";
+  return `${period.start.slice(0, 10)} a ${period.end.slice(0, 10)}`;
+}
+
+function parseAnswerSections(answer) {
+  const sections = [];
+  const regex = /(?:^|\n)\s*\*\*([^*\n]+)\*\*\s*/g;
+  const matches = [...String(answer || "").matchAll(regex)];
+
+  if (!matches.length) {
+    return [{ title: "Resposta", body: answer || "" }];
+  }
+
+  matches.forEach((match, index) => {
+    const start = match.index + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index : answer.length;
+    sections.push({
+      title: match[1].trim(),
+      body: answer.slice(start, end).trim(),
+    });
+  });
+
+  return sections.filter((section) => section.body);
+}
+
+function sectionHtml(sections, names) {
+  const normalizedNames = names.map(normalizeText);
+  const selected = sections.filter((section) =>
+    normalizedNames.some((name) => normalizeText(section.title).includes(name))
+  );
+
+  if (!selected.length) return "";
+
+  return selected
+    .map((section) => `<strong>${escapeHtml(section.title)}</strong>\n${markdownToHtml(section.body)}`)
+    .join("\n\n");
+}
+
+function renderAnalyzeResult(data) {
+  const mapping = data.fault_mapping || {};
+  const similar = data.similar_events || {};
+  const chunks = data.retrieved_chunks || [];
+  const guardrails = data.guardrails || {};
+  const sections = parseAnswerSections(data.answer || "");
+
+  const diagnosisHtml =
+    sectionHtml(sections, [
+      "tipo de falha",
+      "evidencias",
+      "diagnostico provavel",
+      "limitacoes",
+    ]) || markdownToHtml(data.answer || "");
+
+  const recommendationHtml =
+    sectionHtml(sections, ["acoes recomendadas", "cuidados de seguranca"]) ||
+    markdownToHtml(data.answer || "");
+
+  const commonFaults = (similar.common_faults || [])
+    .map(
+      (item) =>
+        `<li><strong>${escapeHtml(item.fault_normalized)}</strong><small>${escapeHtml(item.count)} ocorrencia(s)</small></li>`
+    )
+    .join("");
+
+  const examples = (similar.examples || [])
+    .map(
+      (item) => `
+        <li>
+          <strong>#${escapeHtml(item.id)} - ${escapeHtml(item.fault_normalized)}</strong>
+          <small>${escapeHtml(item.created_at)} | distancia ${Number(item.similarity_distance).toFixed(3)}</small>
+        </li>`
+    )
+    .join("");
+
+  const chunkItems = chunks
+    .map(
+      (chunk) => `
+        <li>
+          <strong>${escapeHtml(chunk.document)} - pagina ${escapeHtml(chunk.page)} - score ${scoreLabel(chunk.score)}</strong>
+          <small>${escapeHtml(chunk.text_preview)}</small>
+        </li>`
+    )
+    .join("");
+
+  const guardrailClass = guardrails.allowed ? "approved" : "blocked";
+  const guardrailText = guardrails.allowed ? "Aprovado para LLM" : "Bloqueado por guardrail";
+
+  return `
+    <div class="result-grid">
+      <article class="result-card">
+        <h3>Falha e similaridade</h3>
+        <div class="fact-grid">
+          <div class="fact"><b>Falha original</b><span>${escapeHtml(mapping.fault_raw)}</span></div>
+          <div class="fact"><b>Falha normalizada</b><span>${escapeHtml(mapping.fault_normalized)}</span></div>
+          <div class="fact"><b>Classe canonica</b><span>${escapeHtml(mapping.display_name)}</span></div>
+          <div class="fact"><b>Similaridade</b><span>${scoreLabel(mapping.score)} - ${escapeHtml(mapping.confidence)}</span></div>
+        </div>
+        <p><span class="pill ${guardrailClass}">${guardrailText}</span></p>
+        <small>${escapeHtml(guardrails.message || "")}</small>
+      </article>
+
+      <article class="result-card">
+        <h3>Historicos recentes</h3>
+        <div class="fact-grid">
+          <div class="fact"><b>Eventos similares</b><span>${escapeHtml(similar.count || 0)}</span></div>
+          <div class="fact"><b>Periodo</b><span>${escapeHtml(formatPeriod(similar.period))}</span></div>
+        </div>
+        <h3 class="small-title">Falhas comuns</h3>
+        <ul class="compact-list">${commonFaults || "<li>Nenhuma falha comum retornada.</li>"}</ul>
+        <h3 class="small-title">Exemplos proximos</h3>
+        <ul class="compact-list">${examples || "<li>Nenhum exemplo retornado.</li>"}</ul>
+      </article>
+
+      <article class="result-card wide">
+        <h3>Recomendacoes</h3>
+        <div class="answer-text">${recommendationHtml}</div>
+      </article>
+
+      <article class="result-card">
+        <h3>Diagnostico e evidencias</h3>
+        <div class="answer-text">${diagnosisHtml}</div>
+      </article>
+
+      <article class="result-card">
+        <h3>Documentos recuperados</h3>
+        <ul class="compact-list">${chunkItems || "<li>Nenhum chunk recuperado.</li>"}</ul>
+      </article>
+
+      <article class="result-card wide">
+        <h3>JSON tecnico</h3>
+        <details class="raw-details">
+          <summary>Mostrar resposta completa da API</summary>
+          <pre class="code-output">${escapeHtml(pretty(data))}</pre>
+        </details>
+      </article>
+    </div>
+  `;
+}
+
 async function apiJson(url, options = {}) {
   const response = await fetch(url, options);
   const data = await response.json();
@@ -58,6 +225,7 @@ async function loadHealth() {
 
 async function analyzeById() {
   const output = document.querySelector("#analyze-output");
+  output.className = "analysis-result empty";
   output.textContent = "Processando...";
   try {
     const eventId = document.querySelector("#event-id").value.trim();
@@ -66,14 +234,17 @@ async function analyzeById() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: eventId, top_k_chunks: 3, similar_events_limit: 3 }),
     });
-    output.textContent = pretty(data);
+    output.className = "analysis-result";
+    output.innerHTML = renderAnalyzeResult(data);
   } catch (error) {
+    output.className = "analysis-result empty";
     output.textContent = String(error);
   }
 }
 
 async function analyzeJson() {
   const output = document.querySelector("#analyze-output");
+  output.className = "analysis-result empty";
   output.textContent = "Processando...";
   try {
     const raw = document.querySelector("#event-json").value.trim();
@@ -83,8 +254,10 @@ async function analyzeJson() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event: JSON.parse(raw), top_k_chunks: 3, similar_events_limit: 3 }),
     });
-    output.textContent = pretty(data);
+    output.className = "analysis-result";
+    output.innerHTML = renderAnalyzeResult(data);
   } catch (error) {
+    output.className = "analysis-result empty";
     output.textContent = String(error);
   }
 }

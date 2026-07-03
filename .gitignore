@@ -17,4 +17,5 @@ tmp/
 # Local reference screenshots
 image.png
 chat-prescritivo-frontend.png
+analysis-blocks.png
 .playwright-mcp/
