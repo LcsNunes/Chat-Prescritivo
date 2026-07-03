@@ -123,6 +123,70 @@ def build_vector_index(
     return index
 
 
+def _normalize_vectors(vectors: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    return vectors / norms
+
+
+def search_index(
+    index: VectorIndex,
+    query_embedding: np.ndarray,
+    top_k: int = 5,
+    min_score: float = 0.0,
+    document_filter: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the most semantically similar chunks from a vector index."""
+    if index.embeddings.size == 0:
+        return []
+
+    candidate_indices = list(range(len(index.chunks)))
+    if document_filter:
+        candidate_indices = [
+            idx for idx, chunk in enumerate(index.chunks) if chunk["document"] in document_filter
+        ]
+    if not candidate_indices:
+        return []
+
+    embeddings = index.embeddings[candidate_indices]
+    query = query_embedding.reshape(1, -1).astype(np.float32)
+
+    normalized_docs = _normalize_vectors(embeddings)
+    normalized_query = _normalize_vectors(query)[0]
+    scores = normalized_docs @ normalized_query
+
+    ranking = np.argsort(scores)[::-1][:top_k]
+    results: list[dict[str, Any]] = []
+    for rank in ranking:
+        score = float(scores[rank])
+        if score < min_score:
+            continue
+        chunk = dict(index.chunks[candidate_indices[int(rank)]])
+        chunk["score"] = score
+        results.append(chunk)
+
+    return results
+
+
+def retrieve_chunks(
+    query: str,
+    index: VectorIndex,
+    model: str | None = None,
+    base_url: str = DEFAULT_OLLAMA_BASE_URL,
+    top_k: int = 5,
+    min_score: float = 0.0,
+    document_filter: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    query_embedding = embed_texts([query], model=model or index.model, base_url=base_url)[0]
+    return search_index(
+        index=index,
+        query_embedding=query_embedding,
+        top_k=top_k,
+        min_score=min_score,
+        document_filter=document_filter,
+    )
+
+
 def ollama_health(base_url: str = DEFAULT_OLLAMA_BASE_URL, timeout: int = 5) -> dict[str, Any]:
     try:
         response = requests.get(f"{base_url.rstrip('/')}/api/tags", timeout=timeout)
@@ -131,4 +195,3 @@ def ollama_health(base_url: str = DEFAULT_OLLAMA_BASE_URL, timeout: int = 5) -> 
         return {"ok": True, "models": [model.get("name") for model in data.get("models", [])]}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-
