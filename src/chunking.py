@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import shutil
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -38,8 +39,9 @@ def _ocr_pdf_page(
     import pytesseract
     from PIL import Image
 
-    if tesseract_cmd:
-        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    resolved_cmd = resolve_tesseract_cmd(tesseract_cmd)
+    if resolved_cmd:
+        pytesseract.pytesseract.tesseract_cmd = resolved_cmd
 
     with fitz.open(str(pdf_path)) as doc:
         page = doc[page_index]
@@ -52,11 +54,31 @@ def _ocr_pdf_page(
         return pytesseract.image_to_string(image)
 
 
+def resolve_tesseract_cmd(tesseract_cmd: str | None = None) -> str | None:
+    """Find Tesseract in PATH or common Windows installation paths."""
+    if tesseract_cmd and Path(tesseract_cmd).exists():
+        return tesseract_cmd
+
+    path_cmd = shutil.which("tesseract")
+    if path_cmd:
+        return path_cmd
+
+    for candidate in (
+        Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+        Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
+    ):
+        if candidate.exists():
+            return str(candidate)
+
+    return tesseract_cmd
+
+
 def _ocr_availability_error(tesseract_cmd: str | None = None) -> str | None:
     import pytesseract
 
-    if tesseract_cmd:
-        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    resolved_cmd = resolve_tesseract_cmd(tesseract_cmd)
+    if resolved_cmd:
+        pytesseract.pytesseract.tesseract_cmd = resolved_cmd
 
     try:
         pytesseract.get_tesseract_version()
@@ -67,10 +89,13 @@ def _ocr_availability_error(tesseract_cmd: str | None = None) -> str | None:
 
 def ocr_status(tesseract_cmd: str | None = None) -> dict[str, Any]:
     error = _ocr_availability_error(tesseract_cmd)
+    resolved_cmd = resolve_tesseract_cmd(tesseract_cmd)
     return {
         "available": error is None,
         "error": error,
+        "tesseract_cmd": resolved_cmd,
         "tesseract_cmd_configured": bool(tesseract_cmd),
+        "tesseract_cmd_auto_detected": bool(resolved_cmd and not tesseract_cmd),
     }
 
 

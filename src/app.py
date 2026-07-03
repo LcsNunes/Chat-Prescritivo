@@ -81,7 +81,7 @@ def _config() -> dict[str, Any]:
         "min_chunk_similarity": float(os.getenv("MIN_CHUNK_SIMILARITY", "0.50")),
         "top_k_chunks": int(os.getenv("TOP_K_CHUNKS", "5")),
         "similar_events_limit": int(os.getenv("SIMILAR_EVENTS_LIMIT", "5")),
-        "enable_ocr": _env_bool("ENABLE_OCR", False),
+        "enable_ocr": _env_bool("ENABLE_OCR", True),
         "ocr_strategy": os.getenv("OCR_STRATEGY", "auto"),
         "ocr_lang": os.getenv("OCR_LANG", "por+eng"),
         "tesseract_cmd": os.getenv("TESSERACT_CMD") or None,
@@ -356,8 +356,12 @@ def chat(payload: ChatRequest) -> dict[str, Any]:
 
     retrieved_chunks: list[dict[str, Any]] = []
     if fault_mapping.has_documentation and not fault_mapping.is_operational_state:
+        retrieval_query = (
+            f"{fault_mapping.fault_normalized} {fault_mapping.display_name}. "
+            f"Pergunta do usuario: {question}"
+        )
         retrieved_chunks = retrieve_chunks(
-            question,
+            retrieval_query,
             get_vector_index(),
             model=cfg["embedding_model"],
             base_url=cfg["ollama_base_url"],

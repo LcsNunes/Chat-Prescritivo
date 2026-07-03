@@ -115,13 +115,15 @@ OCR_LANG=por+eng
 TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
 ```
 
+No Windows, o projeto tenta detectar automaticamente `C:\Program Files\Tesseract-OCR\tesseract.exe`. Configure `TESSERACT_CMD` somente se o executavel estiver em outro caminho.
+
 Estrategias:
 
 - `auto`: aplica OCR quando a pagina nao tem texto suficiente ou quando possui imagens.
 - `missing_text`: aplica OCR somente quando a pagina quase nao tem texto extraivel.
 - `always`: aplica OCR em todas as paginas.
 
-No Windows, instale o Tesseract OCR e configure `TESSERACT_CMD` se o executavel nao estiver no `PATH`.
+No Windows, instale o Tesseract OCR se `GET /health` retornar `ocr.available=false`.
 
 O endpoint `GET /health` mostra `ocr.available`. O endpoint `GET /documents` mostra paginas com imagem, paginas com OCR e paginas em que o OCR esta indisponivel.
 
