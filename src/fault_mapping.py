@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import numpy as np
+
+from src.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_OLLAMA_BASE_URL, embed_texts
 
 
 OPERATIONAL_STATES = {"normal", "baseline", "teste", "acelerando", "motor_desligado"}
@@ -66,6 +69,126 @@ class FaultSummary:
     fault_raw: str
     fault_normalized: str
     is_operational_state: bool
+
+
+@dataclass(frozen=True)
+class CanonicalFault:
+    key: str
+    display_name: str
+    description: str
+    related_documents: tuple[str, ...]
+    has_documentation: bool = True
+
+
+@dataclass(frozen=True)
+class FaultMappingResult:
+    fault_raw: str
+    fault_normalized: str
+    canonical_key: str
+    display_name: str
+    score: float
+    confidence: str
+    has_documentation: bool
+    related_documents: tuple[str, ...]
+    is_operational_state: bool
+
+
+CANONICAL_FAULTS: tuple[CanonicalFault, ...] = (
+    CanonicalFault(
+        key="bearing_fault",
+        display_name="Falha em rolamento",
+        description=(
+            "Falhas em rolamentos de maquinas rotativas: rolamento externo, rolamento interno, "
+            "esferas, gaiola, bearing fault, outer race, inner race, ball fault, combination fault."
+        ),
+        related_documents=("Doc1.pdf",),
+    ),
+    CanonicalFault(
+        key="misalignment",
+        display_name="Desalinhamento",
+        description=(
+            "Desalinhamento de motor eletrico, eixo desalinhado, desalinhado, misalignment, "
+            "desalinhamento angular, paralelo ou combinado."
+        ),
+        related_documents=("Doc2.pdf",),
+    ),
+    CanonicalFault(
+        key="unbalance",
+        display_name="Desbalanceamento",
+        description=(
+            "Desbalanceamento, desbalanceado, unbalance, massa desbalanceada, rotor com vibracao radial, "
+            "desbalanceado por parafuso ou massa irregular."
+        ),
+        related_documents=("Doc3.pdf",),
+    ),
+    CanonicalFault(
+        key="belt_fault",
+        display_name="Falha em correia",
+        description=(
+            "Falha em correia de transmissao, correia frouxa, correia tensionada, desgaste, "
+            "escorregamento, belt fault."
+        ),
+        related_documents=("Doc4.pdf",),
+    ),
+    CanonicalFault(
+        key="pulley_fault",
+        display_name="Falha em polia",
+        description=(
+            "Falha em polia, pulley fault, polia excentrica, polia desalinhada, desgaste de polias, "
+            "transmissao por correia."
+        ),
+        related_documents=("Doc5.pdf",),
+    ),
+    CanonicalFault(
+        key="cocked_rotor",
+        display_name="Rotor inclinado / Cocked Rotor",
+        description=(
+            "Rotor inclinado, cocked rotor, rotor fora de esquadro, montagem inclinada, "
+            "desvio angular do plano do rotor."
+        ),
+        related_documents=("Doc6.pdf",),
+    ),
+    CanonicalFault(
+        key="fan_fault",
+        display_name="Falha em ventoinha",
+        description=(
+            "Falha em ventoinha, ventilador, refrigeracao insuficiente, ventoinha parada, fan fault."
+        ),
+        related_documents=("Doc7.pdf",),
+    ),
+    CanonicalFault(
+        key="phase_loss",
+        display_name="Falta de fase",
+        description="Falta de fase eletrica, phase loss, problema na alimentacao trifasica.",
+        related_documents=("Doc8.pdf",),
+    ),
+    CanonicalFault(
+        key="undocumented_eccentric_rotor",
+        display_name="Rotor excentrico sem documento cadastrado",
+        description=(
+            "Rotor excentrico, eccentric rotor, excentricidade do rotor. Classe conhecida nos dados, "
+            "mas sem procedimento tecnico especifico cadastrado."
+        ),
+        related_documents=(),
+        has_documentation=False,
+    ),
+    CanonicalFault(
+        key="operational_state",
+        display_name="Estado operacional sem falha",
+        description=(
+            "Estado operacional sem defeito: normal, baseline, teste, acelerando ou motor desligado."
+        ),
+        related_documents=(),
+        has_documentation=False,
+    ),
+)
+
+
+def get_canonical_fault(key: str) -> CanonicalFault:
+    for fault in CANONICAL_FAULTS:
+        if fault.key == key:
+            return fault
+    raise KeyError(f"Unknown canonical fault: {key}")
 
 
 def _strip_accents(value: str) -> str:
@@ -167,4 +290,78 @@ def load_events(csv_path: str | Path) -> pd.DataFrame:
 def fault_distribution(df: pd.DataFrame, limit: int = 20) -> list[dict[str, Any]]:
     counts = df["fault_normalized"].value_counts().head(limit)
     return [{"fault_normalized": key, "count": int(value)} for key, value in counts.items()]
+
+
+def _confidence(score: float, min_score: float) -> str:
+    if score < min_score:
+        return "low"
+    if score >= 0.70:
+        return "high"
+    return "medium"
+
+
+def _normalize_vector(vector: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vector)
+    return vector if norm == 0 else vector / norm
+
+
+def map_fault_to_canonical(
+    fault_raw: Any,
+    model: str = DEFAULT_EMBEDDING_MODEL,
+    base_url: str = DEFAULT_OLLAMA_BASE_URL,
+    min_score: float = 0.55,
+) -> FaultMappingResult:
+    """Map a noisy fault label to a canonical class using semantic similarity."""
+    summary = summarize_fault(fault_raw)
+
+    if summary.is_operational_state:
+        canonical = get_canonical_fault("operational_state")
+        return FaultMappingResult(
+            fault_raw=summary.fault_raw,
+            fault_normalized=summary.fault_normalized,
+            canonical_key=canonical.key,
+            display_name=canonical.display_name,
+            score=1.0,
+            confidence="high",
+            has_documentation=canonical.has_documentation,
+            related_documents=canonical.related_documents,
+            is_operational_state=True,
+        )
+
+    class_texts = [
+        f"{fault.key}. {fault.display_name}. {fault.description}" for fault in CANONICAL_FAULTS
+    ]
+    query = (
+        f"Falha informada pelo operador: {summary.fault_raw}. "
+        f"Falha normalizada: {summary.fault_normalized}."
+    )
+
+    embeddings = embed_texts([query] + class_texts, model=model, base_url=base_url)
+    query_embedding = _normalize_vector(embeddings[0])
+    class_embeddings = np.array([_normalize_vector(vector) for vector in embeddings[1:]])
+    scores = class_embeddings @ query_embedding
+    best_index = int(np.argmax(scores))
+    best_score = float(scores[best_index])
+    canonical = CANONICAL_FAULTS[best_index]
+
+    if best_score < min_score:
+        canonical = CanonicalFault(
+            key="undocumented_unknown",
+            display_name="Falha sem documento cadastrado",
+            description="Falha nao mapeada com confianca suficiente.",
+            related_documents=(),
+            has_documentation=False,
+        )
+
+    return FaultMappingResult(
+        fault_raw=summary.fault_raw,
+        fault_normalized=summary.fault_normalized,
+        canonical_key=canonical.key,
+        display_name=canonical.display_name,
+        score=best_score,
+        confidence=_confidence(best_score, min_score),
+        has_documentation=canonical.has_documentation,
+        related_documents=canonical.related_documents,
+        is_operational_state=False,
+    )
 
