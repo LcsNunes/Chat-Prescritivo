@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat Prescritivo</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="signal">~</div>
+        <div>
+          <strong>SENAI</strong>
+          <span>MANUTENCAO PRESCRITIVA</span>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Navegacao principal">
+        <button class="nav-item" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="analyze">Analisar</button>
+        <button class="nav-item active" data-view="chat">Chat</button>
+        <button class="nav-item" data-view="documents">Documentos</button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="hero">
+        <span>MANUTENCAO PRESCRITIVA</span>
+        <h1 id="page-title">Chat tecnico</h1>
+      </header>
+
+      <section class="view compact" id="view-dashboard">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">STATUS</span>
+              <h2>Ambiente local</h2>
+            </div>
+            <button class="ghost" id="refresh-health">Atualizar</button>
+          </div>
+          <div class="metric-grid" id="health-cards"></div>
+          <pre class="code-output" id="health-output">Carregando status...</pre>
+        </div>
+      </section>
+
+      <section class="view compact" id="view-analyze">
+        <div class="panel">
+          <span class="eyebrow">ANALISE DE EVENTO</span>
+          <h2>Evento do banner.csv</h2>
+          <div class="inline-form">
+            <label for="event-id">Event ID</label>
+            <input id="event-id" value="114387" />
+            <button id="analyze-id">Analisar</button>
+          </div>
+          <label for="event-json">Ou cole um evento JSON</label>
+          <textarea id="event-json" placeholder='{"fault":"cocked_rotor_2","rpm":1000}'></textarea>
+          <button id="analyze-json">Analisar JSON</button>
+          <div class="answer-card">
+            <span class="eyebrow">RESULTADO</span>
+            <pre id="analyze-output">Aguardando analise.</pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="view compact active" id="view-chat">
+        <div class="panel">
+          <span class="eyebrow">CHAT TECNICO</span>
+          <h2>Agente de manutencao</h2>
+          <div class="chips">
+            <button data-question="rotor inclinado tem procedimento?">rotor inclinado tem procedimento?</button>
+            <button data-question="qual procedimento para rolamento?">qual procedimento para rolamento?</button>
+            <button data-question="falta de fase tem documento?">falta de fase tem documento?</button>
+            <button data-question="normal_6 precisa de manutencao?">normal_6 precisa de manutencao?</button>
+          </div>
+          <textarea id="chat-question" placeholder="Ex.: rotor inclinado tem procedimento?"></textarea>
+          <button id="send-chat">Enviar</button>
+          <div class="answer-card">
+            <span class="eyebrow">RESPOSTA</span>
+            <div id="chat-answer">Aguardando pergunta.</div>
+          </div>
+          <details>
+            <summary>Ver detalhes tecnicos</summary>
+            <pre class="code-output" id="chat-debug"></pre>
+          </details>
+        </div>
+      </section>
+
+      <section class="view compact" id="view-documents">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">BASE DOCUMENTAL</span>
+              <h2>Manuais tecnicos</h2>
+            </div>
+            <button class="ghost" id="refresh-documents">Atualizar</button>
+          </div>
+          <form class="upload-box" id="upload-form">
+            <input type="file" id="document-file" accept="application/pdf" />
+            <label class="checkline">
+              <input type="checkbox" id="overwrite-document" />
+              substituir se ja existir
+            </label>
+            <button type="submit">Adicionar PDF</button>
+          </form>
+          <div class="document-list" id="document-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

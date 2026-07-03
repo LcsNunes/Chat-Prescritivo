@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import math
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 try:
@@ -28,7 +30,7 @@ from src.fault_mapping import (
     summarize_fault,
 )
 from src.guardrails import build_undocumented_response, evaluate_guardrails, validate_llm_answer
-from src.prompts import build_rag_messages
+from src.prompts import build_chat_messages, build_rag_messages
 from src.rag import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
@@ -40,7 +42,8 @@ from src.rag import (
 )
 
 
-app = FastAPI(title="Chat Prescritivo", version="1.0.0")
+app = FastAPI(title="Chat Prescritivo", version="1.1.0")
+app.mount("/assets", StaticFiles(directory="frontend"), name="assets")
 
 EVENTS_DF: pd.DataFrame | None = None
 DOCUMENT_CHUNKS: list[dict[str, Any]] | None = None
@@ -52,6 +55,11 @@ class AnalyzeRequest(BaseModel):
     event: dict[str, Any] | None = None
     top_k_chunks: int | None = None
     similar_events_limit: int | None = None
+
+
+class ChatRequest(BaseModel):
+    question: str
+    top_k_chunks: int | None = None
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -125,6 +133,42 @@ def get_vector_index():
     return VECTOR_INDEX
 
 
+def reset_document_cache() -> None:
+    global DOCUMENT_CHUNKS, VECTOR_INDEX
+    DOCUMENT_CHUNKS = None
+    VECTOR_INDEX = None
+
+
+def _safe_pdf_name(filename: str) -> str:
+    name = Path(filename).name
+    if not name or Path(name).suffix.lower() != ".pdf":
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    return name
+
+
+def _document_path(filename: str) -> Path:
+    cfg = _config()
+    docs_dir = Path(cfg["docs_path"]).resolve()
+    target = (docs_dir / _safe_pdf_name(filename)).resolve()
+    if docs_dir not in target.parents:
+        raise HTTPException(status_code=400, detail="Invalid document name.")
+    return target
+
+
+def _chunk_response(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "chunk_id": chunk["chunk_id"],
+            "document": chunk["document"],
+            "page": chunk["page"],
+            "chunk_index": chunk["chunk_index"],
+            "score": chunk.get("score"),
+            "text_preview": chunk["text"][:350],
+        }
+        for chunk in chunks
+    ]
+
+
 def _event_from_request(payload: AnalyzeRequest) -> dict[str, Any]:
     df = get_events_df()
     if payload.event_id is not None:
@@ -144,184 +188,36 @@ def _raw_fault_from_event(event: dict[str, Any]) -> str:
     return str(event.get("fault_raw") or event.get("fault") or "")
 
 
-@app.get("/", response_class=HTMLResponse)
-def demo_page() -> str:
-    return """
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chat Prescritivo</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #f4f2ee;
-      --panel: #ffffff;
-      --ink: #17201d;
-      --muted: #5b6762;
-      --line: #c9d0ca;
-      --accent: #0f6b57;
-      --accent-strong: #0a493b;
-      --warn: #8d3f1d;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--ink);
-      font-family: "Aptos", "Segoe UI", sans-serif;
-      letter-spacing: 0;
-    }
-    main {
-      min-height: 100vh;
-      display: grid;
-      grid-template-columns: minmax(320px, 420px) 1fr;
-      gap: 0;
-    }
-    aside {
-      border-right: 1px solid var(--line);
-      background: #ebe7de;
-      padding: 28px;
-    }
-    section {
-      padding: 28px;
-    }
-    h1 {
-      font-size: 28px;
-      line-height: 1.1;
-      margin: 0 0 22px;
-      font-weight: 750;
-    }
-    label {
-      display: block;
-      margin: 18px 0 8px;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--muted);
-      text-transform: uppercase;
-    }
-    input, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--panel);
-      color: var(--ink);
-      font: inherit;
-      padding: 11px 12px;
-    }
-    textarea {
-      min-height: 180px;
-      resize: vertical;
-      font-family: "Cascadia Mono", Consolas, monospace;
-      font-size: 13px;
-    }
-    .row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 14px;
-    }
-    button {
-      border: 0;
-      border-radius: 6px;
-      background: var(--accent);
-      color: white;
-      padding: 12px 14px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    button.secondary { background: var(--accent-strong); }
-    .status {
-      min-height: 22px;
-      margin-top: 14px;
-      color: var(--warn);
-      font-size: 14px;
-    }
-    pre {
-      margin: 0;
-      min-height: calc(100vh - 56px);
-      white-space: pre-wrap;
-      overflow: auto;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 20px;
-      font-family: "Cascadia Mono", Consolas, monospace;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    @media (max-width: 860px) {
-      main { grid-template-columns: 1fr; }
-      aside { border-right: 0; border-bottom: 1px solid var(--line); }
-      pre { min-height: 55vh; }
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <aside>
-      <h1>Chat Prescritivo</h1>
-      <label for="eventId">Event ID</label>
-      <input id="eventId" value="114387" />
-      <div class="row">
-        <button onclick="analyzeById()">Analisar ID</button>
-        <button class="secondary" onclick="loadHealth()">Health</button>
-      </div>
-      <label for="eventJson">Evento JSON</label>
-      <textarea id="eventJson" spellcheck="false"></textarea>
-      <button style="width:100%; margin-top:10px" onclick="analyzeJson()">Analisar JSON</button>
-      <div class="status" id="status"></div>
-    </aside>
-    <section>
-      <pre id="output">Aguardando analise.</pre>
-    </section>
-  </main>
-  <script>
-    const statusEl = document.getElementById("status");
-    const outputEl = document.getElementById("output");
-
-    async function postAnalyze(payload) {
-      statusEl.textContent = "Processando...";
-      outputEl.textContent = "";
-      try {
-        const res = await fetch("/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        outputEl.textContent = JSON.stringify(data, null, 2);
-        statusEl.textContent = res.ok ? "Concluido." : "Erro na analise.";
-      } catch (err) {
-        statusEl.textContent = "Falha de comunicacao.";
-        outputEl.textContent = String(err);
-      }
+def _document_inventory() -> list[dict[str, Any]]:
+    cfg = _config()
+    docs_dir = Path(cfg["docs_path"])
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    report = {
+        item["document"]: item
+        for item in document_extraction_report(docs_dir, enable_ocr=cfg["enable_ocr"])
     }
 
-    function analyzeById() {
-      postAnalyze({ event_id: document.getElementById("eventId").value });
-    }
+    documents: list[dict[str, Any]] = []
+    for pdf_path in sorted(docs_dir.glob("*.pdf")):
+        stat = pdf_path.stat()
+        item = {
+            "document": pdf_path.name,
+            "size_bytes": stat.st_size,
+            "indexed": False,
+            "pages": None,
+            "text_pages": None,
+            "characters": None,
+            "methods": [],
+        }
+        item.update(report.get(pdf_path.name, {}))
+        item["indexed"] = bool(item.get("characters"))
+        documents.append(item)
+    return documents
 
-    function analyzeJson() {
-      const raw = document.getElementById("eventJson").value.trim();
-      if (!raw) {
-        statusEl.textContent = "Informe um JSON.";
-        return;
-      }
-      postAnalyze({ event: JSON.parse(raw) });
-    }
 
-    async function loadHealth() {
-      statusEl.textContent = "Consultando health...";
-      const res = await fetch("/health");
-      outputEl.textContent = JSON.stringify(await res.json(), null, 2);
-      statusEl.textContent = "Concluido.";
-    }
-  </script>
-</body>
-</html>
-"""
+@app.get("/", include_in_schema=False)
+def frontend_index() -> FileResponse:
+    return FileResponse("frontend/index.html")
 
 
 @app.get("/health")
@@ -353,6 +249,50 @@ def document_report() -> list[dict[str, Any]]:
     return _jsonable(document_extraction_report(cfg["docs_path"], enable_ocr=cfg["enable_ocr"]))
 
 
+@app.get("/documents")
+def list_documents() -> dict[str, Any]:
+    return _jsonable({"documents": _document_inventory()})
+
+
+@app.post("/documents")
+def add_document(
+    file: UploadFile = File(...),
+    overwrite: bool = Query(False),
+) -> dict[str, Any]:
+    filename = _safe_pdf_name(file.filename or "")
+    target = _document_path(filename)
+
+    if target.exists() and not overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail="Document already exists. Use overwrite=true to replace it.",
+        )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    reset_document_cache()
+    return _jsonable(
+        {
+            "message": "Document saved and RAG index invalidated.",
+            "document": filename,
+            "size_bytes": target.stat().st_size,
+        }
+    )
+
+
+@app.delete("/documents/{filename}")
+def delete_document(filename: str) -> dict[str, Any]:
+    target = _document_path(filename)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    target.unlink()
+    reset_document_cache()
+    return {"message": "Document deleted and RAG index invalidated.", "document": target.name}
+
+
 @app.get("/events/{event_id}")
 def event_by_id(event_id: int | str) -> dict[str, Any]:
     return _jsonable(get_event_by_id(get_events_df(), event_id))
@@ -367,6 +307,62 @@ def sample_events(fault: str | None = None, limit: int = 10) -> list[dict[str, A
         sample = sample[sample["fault_normalized"] == normalized]
     rows = sample.head(max(1, min(limit, 100))).to_dict(orient="records")
     return _jsonable(rows)
+
+
+@app.post("/chat")
+def chat(payload: ChatRequest) -> dict[str, Any]:
+    cfg = _config()
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    fault_mapping = map_fault_to_canonical(
+        question,
+        model=cfg["embedding_model"],
+        base_url=cfg["ollama_base_url"],
+        min_score=cfg["min_fault_similarity"],
+    )
+
+    retrieved_chunks: list[dict[str, Any]] = []
+    if fault_mapping.has_documentation and not fault_mapping.is_operational_state:
+        retrieved_chunks = retrieve_chunks(
+            question,
+            get_vector_index(),
+            model=cfg["embedding_model"],
+            base_url=cfg["ollama_base_url"],
+            top_k=payload.top_k_chunks or cfg["top_k_chunks"],
+            min_score=0.0,
+            document_filter=set(fault_mapping.related_documents),
+        )
+
+    guardrail_decision = evaluate_guardrails(
+        fault_mapping,
+        retrieved_chunks,
+        min_chunk_score=cfg["min_chunk_similarity"],
+    )
+
+    if guardrail_decision["allowed"]:
+        messages = build_chat_messages(question, fault_mapping, retrieved_chunks)
+        answer = chat_with_ollama(
+            messages,
+            model=cfg["llm_model"],
+            base_url=cfg["ollama_base_url"],
+        )
+        validation = validate_llm_answer(answer, retrieved_chunks)
+    else:
+        answer = build_undocumented_response(fault_mapping, guardrail_decision)
+        validation = {"ok": True, "documents": [], "cited_documents": []}
+
+    return _jsonable(
+        {
+            "question": question,
+            "fault_mapping": fault_mapping.__dict__,
+            "retrieved_chunks": _chunk_response(retrieved_chunks),
+            "guardrails": guardrail_decision,
+            "answer_validation": validation,
+            "answer": answer,
+        }
+    )
 
 
 @app.post("/analyze")
@@ -423,17 +419,7 @@ def analyze(payload: AnalyzeRequest) -> dict[str, Any]:
             "event": event,
             "fault_mapping": fault_mapping.__dict__,
             "similar_events": similar_events,
-            "retrieved_chunks": [
-                {
-                    "chunk_id": chunk["chunk_id"],
-                    "document": chunk["document"],
-                    "page": chunk["page"],
-                    "chunk_index": chunk["chunk_index"],
-                    "score": chunk.get("score"),
-                    "text_preview": chunk["text"][:350],
-                }
-                for chunk in retrieved_chunks
-            ],
+            "retrieved_chunks": _chunk_response(retrieved_chunks),
             "guardrails": guardrail_decision,
             "answer_validation": validation,
             "answer": answer,

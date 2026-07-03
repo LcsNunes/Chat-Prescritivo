@@ -8,4 +8,4 @@ pytesseract
 Pillow
 PyMuPDF
 python-dotenv
-
+python-multipart

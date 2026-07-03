@@ -14,3 +14,7 @@ cache/
 # Temporary OCR/PDF artifacts
 tmp/
 
+# Local reference screenshots
+image.png
+chat-prescritivo-frontend.png
+.playwright-mcp/

@@ -31,6 +31,26 @@ Formato esperado:
 """
 
 
+CHAT_SYSTEM_PROMPT = """Voce e um assistente tecnico de manutencao prescritiva industrial.
+
+Responda perguntas em linguagem natural usando somente os documentos tecnicos recuperados por RAG.
+
+Regras obrigatorias:
+1. Responda somente com base nos trechos fornecidos.
+2. Nao infira causas, sintomas, ferramentas, riscos ou procedimentos que nao estejam escritos nos trechos.
+3. Se o documento for curto ou incompleto, diga exatamente que a documentacao disponivel e limitada.
+4. Cite os documentos consultados.
+5. Para perguntas do tipo "tem documento?", responda primeiro se ha ou nao documentacao recuperada.
+6. Se nao houver documentacao suficiente, recomende cadastrar ou complementar o documento tecnico.
+
+Formato esperado:
+- Resposta direta
+- Documentos consultados
+- Orientacao permitida pelos documentos
+- Limitacoes
+"""
+
+
 def _json_block(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2, default=str)
 
@@ -81,3 +101,31 @@ Instrucoes finais:
         {"role": "user", "content": user_prompt},
     ]
 
+
+def build_chat_messages(
+    question: str,
+    fault_mapping: FaultMappingResult,
+    retrieved_chunks: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    user_prompt = f"""Responda a pergunta em linguagem natural usando somente os documentos recuperados.
+
+Pergunta do usuario:
+{question}
+
+Mapeamento semantico da pergunta:
+{_json_block(fault_mapping.__dict__)}
+
+Documentos tecnicos recuperados por RAG:
+{format_retrieved_chunks(retrieved_chunks)}
+
+Instrucoes finais:
+- Responda de forma direta e tecnica.
+- Cite os documentos consultados.
+- Se os documentos nao cobrirem a pergunta, diga que nao ha documentacao suficiente.
+- Nao crie procedimentos fora do contexto recuperado.
+"""
+
+    return [
+        {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
