@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+requests
+pdfplumber
+pytesseract
+Pillow
+PyMuPDF
+python-dotenv
+

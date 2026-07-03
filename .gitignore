@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local RAG/embedding caches
+cache/
+*.pkl
+*.npy
+
+# Temporary OCR/PDF artifacts
+tmp/
+
