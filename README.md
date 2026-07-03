@@ -16,6 +16,7 @@ Pre-requisitos:
 
 - Python 3.10+
 - Ollama rodando em `http://localhost:11434`
+- Tesseract OCR, caso deseje extrair texto de imagens dentro dos PDFs
 - Modelos locais:
   - `qwen3:8b`
   - `qwen3-embedding:4b`
@@ -94,13 +95,35 @@ O backend serve os arquivos estaticos em `/assets`, mas o codigo da interface na
 O RAG esta implementado em `src/chunking.py` e `src/rag.py`.
 
 - `chunking.py` extrai texto dos PDFs com `pdfplumber`.
-- PDFs sem texto extraivel podem usar OCR opcional com `pytesseract` quando `ENABLE_OCR=true`.
+- PDFs sem texto extraivel ou paginas com imagens podem usar OCR com `pytesseract` quando `ENABLE_OCR=true`.
+- Quando uma pagina possui texto embutido e tambem imagem com texto, o sistema combina o texto do PDF com linhas adicionais recuperadas por OCR, evitando duplicacoes obvias.
 - Cada chunk guarda `document`, `page`, `chunk_index`, `chunk_id`, texto e metodo de extracao.
 - `rag.py` chama o endpoint real do Ollama `/api/embed`.
 - O indice vetorial e local, simples e salvo em `cache/`.
 - A busca usa NumPy e similaridade cosseno.
 
 Nao ha hashing, TF-IDF ou embeddings simulados.
+
+### OCR
+
+O OCR e controlado por variaveis de ambiente:
+
+```env
+ENABLE_OCR=true
+OCR_STRATEGY=auto
+OCR_LANG=por+eng
+TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
+```
+
+Estrategias:
+
+- `auto`: aplica OCR quando a pagina nao tem texto suficiente ou quando possui imagens.
+- `missing_text`: aplica OCR somente quando a pagina quase nao tem texto extraivel.
+- `always`: aplica OCR em todas as paginas.
+
+No Windows, instale o Tesseract OCR e configure `TESSERACT_CMD` se o executavel nao estiver no `PATH`.
+
+O endpoint `GET /health` mostra `ocr.available`. O endpoint `GET /documents` mostra paginas com imagem, paginas com OCR e paginas em que o OCR esta indisponivel.
 
 ## Tratamento da Coluna `fault`
 

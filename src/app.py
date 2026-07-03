@@ -20,7 +20,7 @@ try:
 except Exception:
     pass
 
-from src.chunking import build_document_chunks, document_extraction_report
+from src.chunking import build_document_chunks, document_extraction_report, ocr_status
 from src.fault_mapping import (
     find_similar_events,
     get_event_by_id,
@@ -82,6 +82,9 @@ def _config() -> dict[str, Any]:
         "top_k_chunks": int(os.getenv("TOP_K_CHUNKS", "5")),
         "similar_events_limit": int(os.getenv("SIMILAR_EVENTS_LIMIT", "5")),
         "enable_ocr": _env_bool("ENABLE_OCR", False),
+        "ocr_strategy": os.getenv("OCR_STRATEGY", "auto"),
+        "ocr_lang": os.getenv("OCR_LANG", "por+eng"),
+        "tesseract_cmd": os.getenv("TESSERACT_CMD") or None,
     }
 
 
@@ -116,7 +119,13 @@ def get_document_chunks() -> list[dict[str, Any]]:
     global DOCUMENT_CHUNKS
     if DOCUMENT_CHUNKS is None:
         cfg = _config()
-        DOCUMENT_CHUNKS = build_document_chunks(cfg["docs_path"], enable_ocr=cfg["enable_ocr"])
+        DOCUMENT_CHUNKS = build_document_chunks(
+            cfg["docs_path"],
+            enable_ocr=cfg["enable_ocr"],
+            ocr_strategy=cfg["ocr_strategy"],
+            tesseract_cmd=cfg["tesseract_cmd"],
+            ocr_lang=cfg["ocr_lang"],
+        )
     return DOCUMENT_CHUNKS
 
 
@@ -194,7 +203,13 @@ def _document_inventory() -> list[dict[str, Any]]:
     docs_dir.mkdir(parents=True, exist_ok=True)
     report = {
         item["document"]: item
-        for item in document_extraction_report(docs_dir, enable_ocr=cfg["enable_ocr"])
+        for item in document_extraction_report(
+            docs_dir,
+            enable_ocr=cfg["enable_ocr"],
+            ocr_strategy=cfg["ocr_strategy"],
+            tesseract_cmd=cfg["tesseract_cmd"],
+            ocr_lang=cfg["ocr_lang"],
+        )
     }
 
     documents: list[dict[str, Any]] = []
@@ -206,7 +221,11 @@ def _document_inventory() -> list[dict[str, Any]]:
             "indexed": False,
             "pages": None,
             "text_pages": None,
+            "image_pages": None,
+            "ocr_pages": None,
+            "ocr_failed_pages": None,
             "characters": None,
+            "ocr_characters": None,
             "methods": [],
         }
         item.update(report.get(pdf_path.name, {}))
@@ -232,10 +251,14 @@ def health() -> dict[str, Any]:
             "chunks_loaded": DOCUMENT_CHUNKS is not None,
             "index_loaded": VECTOR_INDEX is not None,
             "ollama": ollama_health(cfg["ollama_base_url"]),
+            "ocr": ocr_status(cfg["tesseract_cmd"]),
             "config": {
                 "llm_model": cfg["llm_model"],
                 "embedding_model": cfg["embedding_model"],
                 "enable_ocr": cfg["enable_ocr"],
+                "ocr_strategy": cfg["ocr_strategy"],
+                "ocr_lang": cfg["ocr_lang"],
+                "tesseract_cmd_configured": bool(cfg["tesseract_cmd"]),
                 "min_fault_similarity": cfg["min_fault_similarity"],
                 "min_chunk_similarity": cfg["min_chunk_similarity"],
             },
@@ -246,7 +269,15 @@ def health() -> dict[str, Any]:
 @app.get("/document-report")
 def document_report() -> list[dict[str, Any]]:
     cfg = _config()
-    return _jsonable(document_extraction_report(cfg["docs_path"], enable_ocr=cfg["enable_ocr"]))
+    return _jsonable(
+        document_extraction_report(
+            cfg["docs_path"],
+            enable_ocr=cfg["enable_ocr"],
+            ocr_strategy=cfg["ocr_strategy"],
+            tesseract_cmd=cfg["tesseract_cmd"],
+            ocr_lang=cfg["ocr_lang"],
+        )
+    )
 
 
 @app.get("/documents")
@@ -425,4 +456,3 @@ def analyze(payload: AnalyzeRequest) -> dict[str, Any]:
             "answer": answer,
         }
     )
-

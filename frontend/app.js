@@ -130,10 +130,11 @@ async function loadDocuments() {
     data.documents.forEach((doc) => {
       const row = document.createElement("div");
       row.className = "document-row";
+      const methods = (doc.methods || []).join(", ") || "sem metodo";
       row.innerHTML = `
         <div>
           <strong>${doc.document}</strong>
-          <small>${doc.pages || 0} paginas | ${doc.characters || 0} caracteres | ${doc.indexed ? "indexavel" : "sem texto extraivel"}</small>
+          <small>${doc.pages || 0} paginas | ${doc.image_pages || 0} com imagens | ${doc.ocr_pages || 0} com OCR | ${doc.ocr_unavailable_pages || 0} sem OCR disponivel | ${doc.characters || 0} caracteres | ${methods}</small>
         </div>
         <button class="danger" data-delete="${doc.document}">Deletar</button>
       `;
@@ -205,4 +206,3 @@ document.querySelector("#document-list").addEventListener("click", (event) => {
 });
 
 loadHealth();
-
