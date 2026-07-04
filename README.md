@@ -220,6 +220,7 @@ Endpoints principais:
 - `POST /documents`
 - `DELETE /documents/{filename}`
 - `GET /events/{event_id}`
+- `POST /events`
 - `GET /sample-events?fault=cocked_rotor&limit=5`
 - `POST /chat`
 - `POST /analyze`
@@ -250,6 +251,30 @@ Quando um documento e adicionado, o cache em memoria de chunks e indice vetorial
 ### `DELETE /documents/{filename}`
 
 Remove um manual PDF obsoleto da base documental e invalida o indice RAG em memoria.
+
+### `POST /events`
+
+Registra ou atualiza um evento no `data/banner.csv`.
+
+Formato:
+
+```json
+{
+  "event": {
+    "id": 114387,
+    "fault": "cocked_rotor_2",
+    "rpm": 1000.0
+  }
+}
+```
+
+Regras:
+
+- Se `id` existir no CSV, atualiza a linha existente.
+- Se `id` nao existir, cria um novo registro com esse `id`.
+- Se `id` nao for enviado, cria um novo registro com o proximo id numerico.
+- Campos derivados como `fault_normalized` nao sao gravados no CSV.
+- Campos que nao existem no CSV sao ignorados e retornados em `ignored_fields`.
 
 Resposta de `/analyze` inclui:
 

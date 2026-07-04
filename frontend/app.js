@@ -247,18 +247,52 @@ async function analyzeJson() {
   output.className = "analysis-result empty";
   output.textContent = "Processando...";
   try {
-    const raw = document.querySelector("#event-json").value.trim();
-    if (!raw) throw new Error("Informe um JSON.");
+    const event = readEventJson();
     const data = await apiJson("/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event: JSON.parse(raw), top_k_chunks: 3, similar_events_limit: 3 }),
+      body: JSON.stringify({ event, top_k_chunks: 3, similar_events_limit: 3 }),
     });
     output.className = "analysis-result";
     output.innerHTML = renderAnalyzeResult(data);
   } catch (error) {
     output.className = "analysis-result empty";
     output.textContent = String(error);
+  }
+}
+
+function readEventJson() {
+  const raw = document.querySelector("#event-json").value.trim();
+  if (!raw) throw new Error("Informe um JSON.");
+  return JSON.parse(raw);
+}
+
+async function saveEvent() {
+  const status = document.querySelector("#event-save-status");
+  status.className = "save-status";
+  status.textContent = "Gravando evento...";
+
+  try {
+    const event = readEventJson();
+    const data = await apiJson("/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event }),
+    });
+
+    document.querySelector("#event-id").value = data.id;
+    status.className = "save-status ok";
+    status.textContent =
+      data.action === "updated"
+        ? `Evento ${data.id} atualizado no banner.csv.`
+        : `Evento ${data.id} registrado no banner.csv.`;
+
+    if (data.ignored_fields?.length) {
+      status.textContent += ` Campos ignorados: ${data.ignored_fields.join(", ")}.`;
+    }
+  } catch (error) {
+    status.className = "save-status error";
+    status.textContent = String(error);
   }
 }
 
@@ -361,6 +395,7 @@ document.querySelectorAll(".nav-item").forEach((item) => {
 document.querySelector("#refresh-health").addEventListener("click", loadHealth);
 document.querySelector("#analyze-id").addEventListener("click", analyzeById);
 document.querySelector("#analyze-json").addEventListener("click", analyzeJson);
+document.querySelector("#save-event").addEventListener("click", saveEvent);
 document.querySelector("#send-chat").addEventListener("click", sendChat);
 document.querySelector("#refresh-documents").addEventListener("click", loadDocuments);
 document.querySelector("#upload-form").addEventListener("submit", uploadDocument);

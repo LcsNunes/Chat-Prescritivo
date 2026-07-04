@@ -57,7 +57,11 @@
           </div>
           <label for="event-json">Ou cole um evento JSON</label>
           <textarea id="event-json" placeholder='{"fault":"cocked_rotor_2","rpm":1000}'></textarea>
-          <button id="analyze-json">Analisar JSON</button>
+          <div class="action-row">
+            <button id="analyze-json">Analisar JSON</button>
+            <button class="ghost" id="save-event">Registrar/Atualizar evento</button>
+          </div>
+          <div class="save-status" id="event-save-status"></div>
           <div class="answer-card analysis-card">
             <span class="eyebrow">RESULTADO</span>
             <div class="analysis-result empty" id="analyze-output">Aguardando analise.</div>

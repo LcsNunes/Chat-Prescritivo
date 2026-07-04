@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,8 @@ NUMERIC_COLUMNS = [
     "x_high_freq_rms_accel_g",
     "rpm",
 ]
+
+DERIVED_EVENT_COLUMNS = {"fault_raw", "fault_normalized", "fault_is_operational_state"}
 
 
 @dataclass(frozen=True)
@@ -285,6 +288,76 @@ def load_events(csv_path: str | Path) -> pd.DataFrame:
             df[column] = pd.to_numeric(df[column], errors="coerce")
 
     return df
+
+
+def _clean_event_payload(event: dict[str, Any], allowed_columns: list[str]) -> tuple[dict[str, Any], list[str]]:
+    payload: dict[str, Any] = {}
+    ignored_fields: list[str] = []
+    allowed = set(allowed_columns)
+
+    for key, value in event.items():
+        if key in DERIVED_EVENT_COLUMNS:
+            continue
+        if key in allowed:
+            payload[key] = value
+        else:
+            ignored_fields.append(key)
+
+    return payload, sorted(ignored_fields)
+
+
+def _next_event_id(df: pd.DataFrame) -> int:
+    ids = pd.to_numeric(df["id"], errors="coerce")
+    if ids.notna().any():
+        return int(ids.max()) + 1
+    return 1
+
+
+def upsert_event(csv_path: str | Path, event: dict[str, Any]) -> dict[str, Any]:
+    """Insert a new event or update an existing one in banner.csv."""
+    path = Path(csv_path)
+    df = pd.read_csv(path)
+    if "id" not in df.columns:
+        raise ValueError("CSV must contain an 'id' column.")
+    if "fault" not in df.columns:
+        raise ValueError("CSV must contain a 'fault' column.")
+
+    payload, ignored_fields = _clean_event_payload(event, list(df.columns))
+    event_id = payload.get("id")
+    action = "created"
+
+    if event_id is None or str(event_id).strip() == "":
+        event_id = _next_event_id(df)
+        payload["id"] = event_id
+
+    mask = df["id"].astype(str) == str(event_id)
+    exists = bool(mask.any())
+
+    if exists:
+        action = "updated"
+        row_index = df.index[mask][0]
+        for column, value in payload.items():
+            df.at[row_index, column] = value
+    else:
+        if not str(payload.get("fault", "")).strip():
+            raise ValueError("New events must include a 'fault' value.")
+        if not str(payload.get("created_at", "")).strip() and "created_at" in df.columns:
+            payload["created_at"] = datetime.now(timezone.utc).isoformat()
+
+        row = {column: "" for column in df.columns}
+        row.update(payload)
+        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+
+    df.to_csv(path, index=False)
+    updated_df = load_events(path)
+    saved_event = get_event_by_id(updated_df, event_id)
+
+    return {
+        "action": action,
+        "id": saved_event["id"],
+        "event": saved_event,
+        "ignored_fields": ignored_fields,
+    }
 
 
 def fault_distribution(df: pd.DataFrame, limit: int = 20) -> list[dict[str, Any]]:

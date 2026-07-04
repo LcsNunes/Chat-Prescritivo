@@ -28,6 +28,7 @@ from src.fault_mapping import (
     map_fault_to_canonical,
     normalize_fault_label,
     summarize_fault,
+    upsert_event,
 )
 from src.guardrails import build_undocumented_response, evaluate_guardrails, validate_llm_answer
 from src.prompts import build_chat_messages, build_rag_messages
@@ -60,6 +61,10 @@ class AnalyzeRequest(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     top_k_chunks: int | None = None
+
+
+class EventUpsertRequest(BaseModel):
+    event: dict[str, Any]
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -113,6 +118,11 @@ def get_events_df() -> pd.DataFrame:
     if EVENTS_DF is None:
         EVENTS_DF = load_events(_config()["data_path"])
     return EVENTS_DF
+
+
+def reset_events_cache() -> None:
+    global EVENTS_DF
+    EVENTS_DF = None
 
 
 def get_document_chunks() -> list[dict[str, Any]]:
@@ -327,6 +337,20 @@ def delete_document(filename: str) -> dict[str, Any]:
 @app.get("/events/{event_id}")
 def event_by_id(event_id: int | str) -> dict[str, Any]:
     return _jsonable(get_event_by_id(get_events_df(), event_id))
+
+
+@app.post("/events")
+def register_event(payload: EventUpsertRequest) -> dict[str, Any]:
+    if not payload.event:
+        raise HTTPException(status_code=400, detail="Event payload cannot be empty.")
+
+    try:
+        result = upsert_event(_config()["data_path"], payload.event)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    reset_events_cache()
+    return _jsonable(result)
 
 
 @app.get("/sample-events")
