@@ -32,6 +32,7 @@ from src.fault_mapping import (
 )
 from src.guardrails import build_undocumented_response, evaluate_guardrails, validate_llm_answer
 from src.prompts import build_chat_messages, build_rag_messages
+from src.event_store import PostgresEventStore, postgres_driver_available
 from src.rag import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
@@ -49,6 +50,7 @@ app.mount("/assets", StaticFiles(directory="frontend"), name="assets")
 EVENTS_DF: pd.DataFrame | None = None
 DOCUMENT_CHUNKS: list[dict[str, Any]] | None = None
 VECTOR_INDEX = None
+EVENT_STORE: PostgresEventStore | None = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -80,6 +82,9 @@ def _config() -> dict[str, Any]:
         "llm_model": os.getenv("LLM_MODEL", DEFAULT_LLM_MODEL),
         "embedding_model": os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
         "data_path": os.getenv("DATA_PATH", "data/banner.csv"),
+        "database_url": os.getenv("DATABASE_URL") or "",
+        "events_table": os.getenv("EVENTS_TABLE", "maintenance_events"),
+        "postgres_seed_from_csv": _env_bool("POSTGRES_SEED_FROM_CSV", True),
         "docs_path": os.getenv("DOCS_PATH", "data/docs"),
         "cache_path": os.getenv("CACHE_PATH", "cache"),
         "min_fault_similarity": float(os.getenv("MIN_FAULT_SIMILARITY", "0.55")),
@@ -116,13 +121,43 @@ def _jsonable(value: Any) -> Any:
 def get_events_df() -> pd.DataFrame:
     global EVENTS_DF
     if EVENTS_DF is None:
-        EVENTS_DF = load_events(_config()["data_path"])
+        cfg = _config()
+        if cfg["database_url"]:
+            EVENTS_DF = get_event_store().load_events()
+        else:
+            EVENTS_DF = load_events(cfg["data_path"])
     return EVENTS_DF
 
 
 def reset_events_cache() -> None:
     global EVENTS_DF
     EVENTS_DF = None
+
+
+def get_event_store() -> PostgresEventStore:
+    global EVENT_STORE
+    cfg = _config()
+    if not cfg["database_url"]:
+        raise RuntimeError("DATABASE_URL não está configurada.")
+    if EVENT_STORE is None:
+        EVENT_STORE = PostgresEventStore(
+            database_url=cfg["database_url"],
+            table_name=cfg["events_table"],
+            seed_from_csv=cfg["postgres_seed_from_csv"],
+            csv_path=cfg["data_path"],
+        )
+    return EVENT_STORE
+
+
+def _events_storage_name() -> str:
+    return "postgresql" if _config()["database_url"] else "csv"
+
+
+def _get_event_by_id_or_404(event_id: int | str) -> dict[str, Any]:
+    try:
+        return get_event_by_id(get_events_df(), event_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 def get_document_chunks() -> list[dict[str, Any]]:
@@ -189,9 +224,8 @@ def _chunk_response(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _event_from_request(payload: AnalyzeRequest) -> dict[str, Any]:
-    df = get_events_df()
     if payload.event_id is not None:
-        return get_event_by_id(df, payload.event_id)
+        return _get_event_by_id_or_404(payload.event_id)
     if payload.event is not None:
         event = dict(payload.event)
         raw_fault = event.get("fault_raw", event.get("fault", ""))
@@ -257,6 +291,9 @@ def health() -> dict[str, Any]:
             "status": "ok",
             "data_path_exists": Path(cfg["data_path"]).exists(),
             "docs_path_exists": Path(cfg["docs_path"]).exists(),
+            "events_storage": _events_storage_name(),
+            "database_configured": bool(cfg["database_url"]),
+            "postgres_driver_available": postgres_driver_available(),
             "events_loaded": EVENTS_DF is not None,
             "chunks_loaded": DOCUMENT_CHUNKS is not None,
             "index_loaded": VECTOR_INDEX is not None,
@@ -336,7 +373,7 @@ def delete_document(filename: str) -> dict[str, Any]:
 
 @app.get("/events/{event_id}")
 def event_by_id(event_id: int | str) -> dict[str, Any]:
-    return _jsonable(get_event_by_id(get_events_df(), event_id))
+    return _jsonable(_get_event_by_id_or_404(event_id))
 
 
 @app.post("/events")
@@ -345,9 +382,16 @@ def register_event(payload: EventUpsertRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="O payload do evento não pode estar vazio.")
 
     try:
-        result = upsert_event(_config()["data_path"], payload.event)
+        cfg = _config()
+        if cfg["database_url"]:
+            result = get_event_store().upsert_event(payload.event)
+        else:
+            result = upsert_event(cfg["data_path"], payload.event)
+            result["storage"] = "csv"
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     reset_events_cache()
     return _jsonable(result)

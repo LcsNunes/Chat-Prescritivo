@@ -6,7 +6,7 @@ O foco desta versão é demonstrar entendimento de arquitetura de IA, embeddings
 
 ## Objetivo
 
-Analisar eventos de manutenção vindos do `data/banner.csv`, identificar a falha informada pelo operador, buscar eventos históricos similares, recuperar documentos técnicos relacionados e gerar uma resposta prescritiva com uma LLM local.
+Analisar eventos de manutenção vindos do `data/banner.csv` ou do PostgreSQL, identificar a falha informada pelo operador, buscar eventos históricos similares, recuperar documentos técnicos relacionados e gerar uma resposta prescritiva com uma LLM local.
 
 Se a falha não possuir documentação suficiente, o sistema bloqueia a prescrição e recomenda cadastrar um novo procedimento técnico.
 
@@ -16,6 +16,7 @@ Pré-requisitos:
 
 - Python 3.10+
 - Ollama rodando em `http://localhost:11434`
+- PostgreSQL opcional para persistir novos eventos operacionais
 - Tesseract OCR, caso deseje extrair texto de imagens dentro dos PDFs
 - Modelos locais:
   - `qwen3:8b`
@@ -32,6 +33,22 @@ Execução:
 ```bash
 uvicorn src.app:app --reload
 ```
+
+PostgreSQL local opcional:
+
+```bash
+docker compose up -d postgres
+```
+
+Para ativar o banco como store de eventos, configure:
+
+```env
+DATABASE_URL=postgresql://chat_prescritivo:chat_prescritivo@localhost:5432/chat_prescritivo
+EVENTS_TABLE=maintenance_events
+POSTGRES_SEED_FROM_CSV=true
+```
+
+Quando `DATABASE_URL` não é informado, o sistema continua usando `data/banner.csv`.
 
 Acesse:
 
@@ -66,6 +83,7 @@ Backend:
 - `src/rag.py`: embeddings, índice vetorial, busca e chamada da LLM.
 - `src/chunking.py`: extração e chunking de PDFs.
 - `src/fault_mapping.py`: normalização de `fault`, mapeamento semântico e busca de eventos similares.
+- `src/event_store.py`: persistência opcional de eventos em PostgreSQL.
 - `src/guardrails.py`: regras anti-alucinação.
 - `src/prompts.py`: prompts da análise e do chat.
 
@@ -79,7 +97,7 @@ O backend serve os arquivos estáticos em `/assets`, mas o código da interface 
 
 ## Fluxo de IA
 
-1. Carrega o evento do CSV ou recebe um JSON pela API.
+1. Carrega o evento do CSV, do PostgreSQL ou recebe um JSON pela API.
 2. Preserva `fault_raw` e cria `fault_normalized`.
 3. Mapeia a falha normalizada para uma classe canônica por similaridade semântica.
 4. Busca eventos históricos similares usando variáveis numéricas normalizadas.
@@ -159,9 +177,31 @@ Classes canônicas principais:
 - `undocumented_eccentric_rotor`
 - `operational_state`
 
+## Persistência de Eventos
+
+O `data/banner.csv` continua sendo a base histórica inicial e o fallback mais simples para a demo.
+
+Quando `DATABASE_URL` está configurado, os endpoints de eventos usam PostgreSQL:
+
+- `GET /events/{event_id}` busca no banco;
+- `POST /events` cria ou atualiza o evento pelo `id`;
+- `POST /analyze` usa o banco para buscar evento por `id`;
+- `GET /sample-events` lista eventos carregados do banco.
+
+A tabela `maintenance_events` é criada automaticamente na primeira consulta. O evento completo é salvo em `payload JSONB`, enquanto os campos principais ficam normalizados:
+
+- `event_id`;
+- `created_at`;
+- `fault`;
+- `fault_normalized`;
+- `fault_is_operational_state`;
+- `updated_at`.
+
+Se `POSTGRES_SEED_FROM_CSV=true`, o banco é carregado com os registros do `banner.csv` quando a tabela ainda está vazia.
+
 ## Eventos Históricos Similares
 
-A busca de similares usa colunas numéricas do `banner.csv`, como vibração, aceleração, temperatura e RPM.
+A busca de similares usa colunas numéricas da base ativa de eventos, seja PostgreSQL ou `banner.csv`, como vibração, aceleração, temperatura e RPM.
 
 Processo:
 
@@ -254,7 +294,7 @@ Remove um manual PDF obsoleto da base documental e invalida o índice RAG em mem
 
 ### `POST /events`
 
-Registra ou atualiza um evento no `data/banner.csv`.
+Registra ou atualiza um evento na base ativa.
 
 Formato:
 
@@ -270,11 +310,15 @@ Formato:
 
 Regras:
 
-- Se `id` existir no CSV, atualiza a linha existente.
+- Se `DATABASE_URL` estiver configurado, grava no PostgreSQL.
+- Se `DATABASE_URL` não estiver configurado, grava no `data/banner.csv`.
+- Se `id` existir, atualiza o evento existente.
 - Se `id` não existir, cria um novo registro com esse `id`.
 - Se `id` não for enviado, cria um novo registro com o próximo id numérico.
-- Campos derivados como `fault_normalized` não são gravados no CSV.
-- Campos que não existem no CSV são ignorados e retornados em `ignored_fields`.
+- Campos derivados como `fault_normalized` não são aceitos no payload de entrada; eles são recalculados pelo backend.
+- No PostgreSQL, o evento completo fica em `payload JSONB` e os campos normalizados ficam em colunas próprias.
+- No fallback CSV, campos que não existem no arquivo são ignorados e retornados em `ignored_fields`.
+- No PostgreSQL, campos extras são preservados dentro de `payload JSONB`.
 
 Resposta de `/analyze` inclui:
 
@@ -289,6 +333,7 @@ Resposta de `/analyze` inclui:
 ## Limitações
 
 - `Doc1.pdf` e `Doc7.pdf` são PDFs de imagem. Sem OCR instalado, eles não entram no índice textual.
+- O PostgreSQL é usado apenas para eventos; documentos, chunks e embeddings continuam em arquivos/cache local.
 - O índice vetorial é local e simples, adequado para demo, não para escala industrial.
 - Os thresholds foram calibrados para este conjunto de dados e devem ser avaliados em produção.
 - A validação da resposta é simples; ela verifica citação de documentos, mas não avalia exatidão técnica automaticamente.

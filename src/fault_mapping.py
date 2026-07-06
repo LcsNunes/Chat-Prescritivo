@@ -272,11 +272,10 @@ def summarize_fault(value: Any) -> FaultSummary:
     )
 
 
-def load_events(csv_path: str | Path) -> pd.DataFrame:
-    """Load banner.csv and add normalized fault fields for downstream steps."""
-    df = pd.read_csv(csv_path)
+def normalize_events_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Add derived fault fields and numeric coercion to an events DataFrame."""
     if "fault" not in df.columns:
-        raise ValueError("CSV must contain a 'fault' column.")
+        raise ValueError("A base de eventos precisa conter a coluna 'fault'.")
 
     df = df.copy()
     df["fault_raw"] = df["fault"].fillna("").astype(str)
@@ -290,15 +289,24 @@ def load_events(csv_path: str | Path) -> pd.DataFrame:
     return df
 
 
-def _clean_event_payload(event: dict[str, Any], allowed_columns: list[str]) -> tuple[dict[str, Any], list[str]]:
+def load_events(csv_path: str | Path) -> pd.DataFrame:
+    """Load banner.csv and add normalized fault fields for downstream steps."""
+    return normalize_events_dataframe(pd.read_csv(csv_path))
+
+
+def _clean_event_payload(
+    event: dict[str, Any],
+    allowed_columns: list[str] | None,
+) -> tuple[dict[str, Any], list[str]]:
     payload: dict[str, Any] = {}
     ignored_fields: list[str] = []
-    allowed = set(allowed_columns)
+    allowed = set(allowed_columns) if allowed_columns is not None else None
 
     for key, value in event.items():
         if key in DERIVED_EVENT_COLUMNS:
+            ignored_fields.append(key)
             continue
-        if key in allowed:
+        if allowed is None or key in allowed:
             payload[key] = value
         else:
             ignored_fields.append(key)

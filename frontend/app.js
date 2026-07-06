@@ -282,10 +282,11 @@ async function saveEvent() {
 
     document.querySelector("#event-id").value = data.id;
     status.className = "save-status ok";
+    const storageLabel = data.storage === "postgresql" ? "PostgreSQL" : "banner.csv";
     status.textContent =
       data.action === "updated"
-        ? `Evento ${data.id} atualizado no banner.csv.`
-        : `Evento ${data.id} registrado no banner.csv.`;
+        ? `Evento ${data.id} atualizado no ${storageLabel}.`
+        : `Evento ${data.id} registrado no ${storageLabel}.`;
 
     if (data.ignored_fields?.length) {
       status.textContent += ` Campos ignorados: ${data.ignored_fields.join(", ")}.`;

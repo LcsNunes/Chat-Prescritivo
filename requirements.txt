@@ -9,3 +9,4 @@ Pillow
 PyMuPDF
 python-dotenv
 python-multipart
+psycopg[binary]
