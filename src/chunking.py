@@ -134,7 +134,7 @@ def _merge_pdf_and_ocr_text(pdf_text: str, ocr_text: str) -> str:
     if not extra_lines:
         return _normalize_whitespace(pdf_text)
 
-    merged = pdf_text.rstrip() + "\n\n[Texto extraido por OCR de imagens ou renderizacao da pagina]\n"
+    merged = pdf_text.rstrip() + "\n\n[Texto extraído por OCR de imagens ou renderização da página]\n"
     merged += "\n".join(extra_lines)
     return _normalize_whitespace(merged)
 

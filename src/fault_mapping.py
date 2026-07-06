@@ -101,7 +101,7 @@ CANONICAL_FAULTS: tuple[CanonicalFault, ...] = (
         key="bearing_fault",
         display_name="Falha em rolamento",
         description=(
-            "Falhas em rolamentos de maquinas rotativas: rolamento externo, rolamento interno, "
+            "Falhas em rolamentos de máquinas rotativas: rolamento externo, rolamento interno, "
             "esferas, gaiola, bearing fault, outer race, inner race, ball fault, combination fault."
         ),
         related_documents=("Doc1.pdf",),
@@ -110,7 +110,7 @@ CANONICAL_FAULTS: tuple[CanonicalFault, ...] = (
         key="misalignment",
         display_name="Desalinhamento",
         description=(
-            "Desalinhamento de motor eletrico, eixo desalinhado, desalinhado, misalignment, "
+            "Desalinhamento de motor elétrico, eixo desalinhado, desalinhado, misalignment, "
             "desalinhamento angular, paralelo ou combinado."
         ),
         related_documents=("Doc2.pdf",),
@@ -119,7 +119,7 @@ CANONICAL_FAULTS: tuple[CanonicalFault, ...] = (
         key="unbalance",
         display_name="Desbalanceamento",
         description=(
-            "Desbalanceamento, desbalanceado, unbalance, massa desbalanceada, rotor com vibracao radial, "
+            "Desbalanceamento, desbalanceado, unbalance, massa desbalanceada, rotor com vibração radial, "
             "desbalanceado por parafuso ou massa irregular."
         ),
         related_documents=("Doc3.pdf",),
@@ -162,15 +162,15 @@ CANONICAL_FAULTS: tuple[CanonicalFault, ...] = (
     CanonicalFault(
         key="phase_loss",
         display_name="Falta de fase",
-        description="Falta de fase eletrica, phase loss, problema na alimentacao trifasica.",
+        description="Falta de fase elétrica, phase loss, problema na alimentação trifásica.",
         related_documents=("Doc8.pdf",),
     ),
     CanonicalFault(
         key="undocumented_eccentric_rotor",
         display_name="Rotor excentrico sem documento cadastrado",
         description=(
-            "Rotor excentrico, eccentric rotor, excentricidade do rotor. Classe conhecida nos dados, "
-            "mas sem procedimento tecnico especifico cadastrado."
+            "Rotor excêntrico, eccentric rotor, excentricidade do rotor. Classe conhecida nos dados, "
+            "mas sem procedimento técnico específico cadastrado."
         ),
         related_documents=(),
         has_documentation=False,
@@ -500,7 +500,7 @@ def map_fault_to_canonical(
         canonical = CanonicalFault(
             key="undocumented_unknown",
             display_name="Falha sem documento cadastrado",
-            description="Falha nao mapeada com confianca suficiente.",
+            description="Falha não mapeada com confiança suficiente.",
             related_documents=(),
             has_documentation=False,
         )

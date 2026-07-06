@@ -161,7 +161,7 @@ def reset_document_cache() -> None:
 def _safe_pdf_name(filename: str) -> str:
     name = Path(filename).name
     if not name or Path(name).suffix.lower() != ".pdf":
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        raise HTTPException(status_code=400, detail="Somente arquivos PDF são suportados.")
     return name
 
 
@@ -170,7 +170,7 @@ def _document_path(filename: str) -> Path:
     docs_dir = Path(cfg["docs_path"]).resolve()
     target = (docs_dir / _safe_pdf_name(filename)).resolve()
     if docs_dir not in target.parents:
-        raise HTTPException(status_code=400, detail="Invalid document name.")
+        raise HTTPException(status_code=400, detail="Nome de documento inválido.")
     return target
 
 
@@ -306,7 +306,7 @@ def add_document(
     if target.exists() and not overwrite:
         raise HTTPException(
             status_code=409,
-            detail="Document already exists. Use overwrite=true to replace it.",
+            detail="O documento já existe. Use overwrite=true para substituí-lo.",
         )
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -316,7 +316,7 @@ def add_document(
     reset_document_cache()
     return _jsonable(
         {
-            "message": "Document saved and RAG index invalidated.",
+            "message": "Documento salvo e índice RAG invalidado.",
             "document": filename,
             "size_bytes": target.stat().st_size,
         }
@@ -327,11 +327,11 @@ def add_document(
 def delete_document(filename: str) -> dict[str, Any]:
     target = _document_path(filename)
     if not target.exists():
-        raise HTTPException(status_code=404, detail="Document not found.")
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
 
     target.unlink()
     reset_document_cache()
-    return {"message": "Document deleted and RAG index invalidated.", "document": target.name}
+    return {"message": "Documento removido e índice RAG invalidado.", "document": target.name}
 
 
 @app.get("/events/{event_id}")
@@ -342,7 +342,7 @@ def event_by_id(event_id: int | str) -> dict[str, Any]:
 @app.post("/events")
 def register_event(payload: EventUpsertRequest) -> dict[str, Any]:
     if not payload.event:
-        raise HTTPException(status_code=400, detail="Event payload cannot be empty.")
+        raise HTTPException(status_code=400, detail="O payload do evento não pode estar vazio.")
 
     try:
         result = upsert_event(_config()["data_path"], payload.event)
@@ -369,7 +369,7 @@ def chat(payload: ChatRequest) -> dict[str, Any]:
     cfg = _config()
     question = payload.question.strip()
     if not question:
-        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+        raise HTTPException(status_code=400, detail="A pergunta não pode estar vazia.")
 
     fault_mapping = map_fault_to_canonical(
         question,
@@ -382,7 +382,7 @@ def chat(payload: ChatRequest) -> dict[str, Any]:
     if fault_mapping.has_documentation and not fault_mapping.is_operational_state:
         retrieval_query = (
             f"{fault_mapping.fault_normalized} {fault_mapping.display_name}. "
-            f"Pergunta do usuario: {question}"
+            f"Pergunta do usuário: {question}"
         )
         retrieved_chunks = retrieve_chunks(
             retrieval_query,

@@ -1,18 +1,18 @@
 # Chat Prescritivo
 
-Projeto simples de manutencao prescritiva com IA Generativa, RAG real e modelos locais via Ollama.
+Projeto simples de manutenção prescritiva com IA Generativa, RAG real e modelos locais via Ollama.
 
-O foco desta versao e demonstrar entendimento de arquitetura de IA, embeddings, recuperacao semantica, prompt engineering, guardrails e fluxo de decisao. A interface web e propositalmente simples e fica separada do backend.
+O foco desta versão é demonstrar entendimento de arquitetura de IA, embeddings, recuperação semântica, prompt engineering, guardrails e fluxo de decisão. A interface web é propositalmente simples e fica separada do backend.
 
 ## Objetivo
 
-Analisar eventos de manutencao vindos do `data/banner.csv`, identificar a falha informada pelo operador, buscar eventos historicos similares, recuperar documentos tecnicos relacionados e gerar uma resposta prescritiva com uma LLM local.
+Analisar eventos de manutenção vindos do `data/banner.csv`, identificar a falha informada pelo operador, buscar eventos históricos similares, recuperar documentos técnicos relacionados e gerar uma resposta prescritiva com uma LLM local.
 
-Se a falha nao possuir documentacao suficiente, o sistema bloqueia a prescricao e recomenda cadastrar um novo procedimento tecnico.
+Se a falha não possuir documentação suficiente, o sistema bloqueia a prescrição e recomenda cadastrar um novo procedimento técnico.
 
 ## Como Executar
 
-Pre-requisitos:
+Pré-requisitos:
 
 - Python 3.10+
 - Ollama rodando em `http://localhost:11434`
@@ -21,13 +21,13 @@ Pre-requisitos:
   - `qwen3:8b`
   - `qwen3-embedding:4b`
 
-Instalacao:
+Instalação:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Execucao:
+Execução:
 
 ```bash
 uvicorn src.app:app --reload
@@ -39,7 +39,7 @@ Acesse:
 - Swagger: `http://127.0.0.1:8000/docs`
 - Health: `http://127.0.0.1:8000/health`
 
-Exemplo de analise por evento:
+Exemplo de análise por evento:
 
 ```json
 {
@@ -58,16 +58,16 @@ Exemplo de chat em linguagem natural:
 }
 ```
 
-## Organizacao Frontend/Backend
+## Organização Frontend/Backend
 
 Backend:
 
 - `src/app.py`: API FastAPI.
-- `src/rag.py`: embeddings, indice vetorial, busca e chamada da LLM.
-- `src/chunking.py`: extracao e chunking de PDFs.
-- `src/fault_mapping.py`: normalizacao de `fault`, mapeamento semantico e busca de eventos similares.
-- `src/guardrails.py`: regras anti-alucinacao.
-- `src/prompts.py`: prompts da analise e do chat.
+- `src/rag.py`: embeddings, índice vetorial, busca e chamada da LLM.
+- `src/chunking.py`: extração e chunking de PDFs.
+- `src/fault_mapping.py`: normalização de `fault`, mapeamento semântico e busca de eventos similares.
+- `src/guardrails.py`: regras anti-alucinação.
+- `src/prompts.py`: prompts da análise e do chat.
 
 Frontend:
 
@@ -75,38 +75,38 @@ Frontend:
 - `frontend/styles.css`
 - `frontend/app.js`
 
-O backend serve os arquivos estaticos em `/assets`, mas o codigo da interface nao fica misturado ao codigo Python.
+O backend serve os arquivos estáticos em `/assets`, mas o código da interface não fica misturado ao código Python.
 
 ## Fluxo de IA
 
 1. Carrega o evento do CSV ou recebe um JSON pela API.
 2. Preserva `fault_raw` e cria `fault_normalized`.
-3. Mapeia a falha normalizada para uma classe canonica por similaridade semantica.
-4. Busca eventos historicos similares usando variaveis numericas normalizadas.
+3. Mapeia a falha normalizada para uma classe canônica por similaridade semântica.
+4. Busca eventos históricos similares usando variáveis numéricas normalizadas.
 5. Extrai textos dos PDFs e divide em chunks com metadados.
 6. Gera embeddings reais dos chunks via Ollama.
 7. Recupera os chunks mais relevantes por similaridade cosseno.
-8. Aplica guardrails de cobertura documental e confianca da recuperacao.
-9. Quando aprovado, monta prompt com evento, historico e chunks.
+8. Aplica guardrails de cobertura documental e confiança da recuperação.
+9. Quando aprovado, monta prompt com evento, histórico e chunks.
 10. Chama a LLM local para sintetizar a resposta final.
 
 ## RAG e Embeddings
 
-O RAG esta implementado em `src/chunking.py` e `src/rag.py`.
+O RAG está implementado em `src/chunking.py` e `src/rag.py`.
 
 - `chunking.py` extrai texto dos PDFs com `pdfplumber`.
-- PDFs sem texto extraivel ou paginas com imagens podem usar OCR com `pytesseract` quando `ENABLE_OCR=true`.
-- Quando uma pagina possui texto embutido e tambem imagem com texto, o sistema combina o texto do PDF com linhas adicionais recuperadas por OCR, evitando duplicacoes obvias.
-- Cada chunk guarda `document`, `page`, `chunk_index`, `chunk_id`, texto e metodo de extracao.
+- PDFs sem texto extraível ou páginas com imagens podem usar OCR com `pytesseract` quando `ENABLE_OCR=true`.
+- Quando uma página possui texto embutido e também imagem com texto, o sistema combina o texto do PDF com linhas adicionais recuperadas por OCR, evitando duplicações óbvias.
+- Cada chunk guarda `document`, `page`, `chunk_index`, `chunk_id`, texto e método de extração.
 - `rag.py` chama o endpoint real do Ollama `/api/embed`.
-- O indice vetorial e local, simples e salvo em `cache/`.
+- O índice vetorial é local, simples e salvo em `cache/`.
 - A busca usa NumPy e similaridade cosseno.
 
-Nao ha hashing, TF-IDF ou embeddings simulados.
+Não há hashing, TF-IDF ou embeddings simulados.
 
 ### OCR
 
-O OCR e controlado por variaveis de ambiente:
+O OCR é controlado por variáveis de ambiente:
 
 ```env
 ENABLE_OCR=true
@@ -115,26 +115,26 @@ OCR_LANG=por+eng
 TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
 ```
 
-No Windows, o projeto tenta detectar automaticamente `C:\Program Files\Tesseract-OCR\tesseract.exe`. Configure `TESSERACT_CMD` somente se o executavel estiver em outro caminho.
+No Windows, o projeto tenta detectar automaticamente `C:\Program Files\Tesseract-OCR\tesseract.exe`. Configure `TESSERACT_CMD` somente se o executável estiver em outro caminho.
 
-Estrategias:
+Estratégias:
 
-- `auto`: aplica OCR quando a pagina nao tem texto suficiente ou quando possui imagens.
-- `missing_text`: aplica OCR somente quando a pagina quase nao tem texto extraivel.
-- `always`: aplica OCR em todas as paginas.
+- `auto`: aplica OCR quando a página não tem texto suficiente ou quando possui imagens.
+- `missing_text`: aplica OCR somente quando a página quase não tem texto extraível.
+- `always`: aplica OCR em todas as páginas.
 
 No Windows, instale o Tesseract OCR se `GET /health` retornar `ocr.available=false`.
 
-O endpoint `GET /health` mostra `ocr.available`. O endpoint `GET /documents` mostra paginas com imagem, paginas com OCR e paginas em que o OCR esta indisponivel.
+O endpoint `GET /health` mostra `ocr.available`. O endpoint `GET /documents` mostra páginas com imagem, páginas com OCR e páginas em que o OCR está indisponível.
 
 ## Tratamento da Coluna `fault`
 
-A coluna `fault` vem de escrita humana, nao diretamente do sensor. Por isso existe uma etapa de limpeza antes do mapeamento semantico.
+A coluna `fault` vem de escrita humana, não diretamente do sensor. Por isso existe uma etapa de limpeza antes do mapeamento semântico.
 
 O sistema preserva:
 
 - `fault_raw`: valor original do CSV ou JSON.
-- `fault_normalized`: valor limpo para analise.
+- `fault_normalized`: valor limpo para análise.
 
 Exemplos:
 
@@ -144,9 +144,9 @@ Exemplos:
 - `cockecocked_adxl_0` -> `cocked_rotor`
 - `new_falta_fase_0` -> `falta_fase`
 
-A limpeza remove ruido operacional como `new`, numeros, `novo`, `carga`, `adxl` e corrige typos comuns. A classe tecnica final continua sendo escolhida por embeddings contra descricoes canonicas.
+A limpeza remove ruído operacional como `new`, números, `novo`, `carga`, `adxl` e corrige erros de digitação comuns. A classe técnica final continua sendo escolhida por embeddings contra descrições canônicas.
 
-Classes canonicas principais:
+Classes canônicas principais:
 
 - `bearing_fault`
 - `misalignment`
@@ -159,48 +159,48 @@ Classes canonicas principais:
 - `undocumented_eccentric_rotor`
 - `operational_state`
 
-## Eventos Historicos Similares
+## Eventos Históricos Similares
 
-A busca de similares usa colunas numericas do `banner.csv`, como vibracao, aceleracao, temperatura e RPM.
+A busca de similares usa colunas numéricas do `banner.csv`, como vibração, aceleração, temperatura e RPM.
 
 Processo:
 
-- converte colunas numericas;
-- preenche ausencias com media;
-- padroniza por media e desvio padrao;
-- calcula distancia euclidiana;
-- retorna vizinhos mais proximos, periodo, falhas mais comuns e exemplos.
+- converte colunas numéricas;
+- preenche ausências com média;
+- padroniza por média e desvio padrão;
+- calcula distância euclidiana;
+- retorna vizinhos mais próximos, período, falhas mais comuns e exemplos.
 
-Isso permite explicar se o novo evento se parece com ocorrencias anteriores.
+Isso permite explicar se o novo evento se parece com ocorrências anteriores.
 
 ## Guardrails
 
 Os guardrails ficam em `src/guardrails.py`.
 
-A LLM so e chamada quando:
+A LLM só é chamada quando:
 
-- a classe nao e estado operacional;
+- a classe não é estado operacional;
 - existe documento relacionado;
 - foram recuperados chunks do documento relacionado;
 - a similaridade do melhor chunk passa do threshold configurado.
 
 Se qualquer regra falhar, o sistema retorna uma resposta segura:
 
-- nao gera procedimento tecnico inventado;
-- informa que falta documentacao;
-- recomenda cadastrar um novo documento tecnico.
+- não gera procedimento técnico inventado;
+- informa que falta documentação;
+- recomenda cadastrar um novo documento técnico.
 
 ## Prompt Engineering
 
 Os prompts ficam em `src/prompts.py`.
 
-O system prompt define o assistente como especialista em manutencao prescritiva e exige:
+O system prompt define o assistente como especialista em manutenção prescritiva e exige:
 
 - responder somente com base nos documentos recuperados;
 - citar documentos e trechos usados;
-- separar diagnostico de acao corretiva;
+- separar diagnóstico de ação corretiva;
 - declarar incerteza;
-- nao inventar ferramentas, causas ou criterios.
+- não inventar ferramentas, causas ou critérios.
 
 A chamada da LLM usa:
 
@@ -227,14 +227,14 @@ Endpoints principais:
 
 ### `POST /chat`
 
-Endpoint para perguntas em linguagem natural. Ele tenta mapear semanticamente a pergunta para uma classe canonica, recupera documentos relacionados e responde somente com base nos chunks.
+Endpoint para perguntas em linguagem natural. Ele tenta mapear semanticamente a pergunta para uma classe canônica, recupera documentos relacionados e responde somente com base nos chunks.
 
 Exemplos de perguntas:
 
 - `rotor inclinado tem procedimento?`
 - `qual procedimento para rolamento?`
 - `falta de fase tem documento?`
-- `normal_6 precisa de manutencao?`
+- `normal_6 precisa de manutenção?`
 
 ### `POST /documents`
 
@@ -246,11 +246,11 @@ Parametro opcional:
 
 - `overwrite=true`: substitui um PDF existente com o mesmo nome.
 
-Quando um documento e adicionado, o cache em memoria de chunks e indice vetorial e invalidado. O indice sera recriado na proxima consulta.
+Quando um documento é adicionado, o cache em memória de chunks e índice vetorial é invalidado. O índice será recriado na próxima consulta.
 
 ### `DELETE /documents/{filename}`
 
-Remove um manual PDF obsoleto da base documental e invalida o indice RAG em memoria.
+Remove um manual PDF obsoleto da base documental e invalida o índice RAG em memória.
 
 ### `POST /events`
 
@@ -271,10 +271,10 @@ Formato:
 Regras:
 
 - Se `id` existir no CSV, atualiza a linha existente.
-- Se `id` nao existir, cria um novo registro com esse `id`.
-- Se `id` nao for enviado, cria um novo registro com o proximo id numerico.
-- Campos derivados como `fault_normalized` nao sao gravados no CSV.
-- Campos que nao existem no CSV sao ignorados e retornados em `ignored_fields`.
+- Se `id` não existir, cria um novo registro com esse `id`.
+- Se `id` não for enviado, cria um novo registro com o próximo id numérico.
+- Campos derivados como `fault_normalized` não são gravados no CSV.
+- Campos que não existem no CSV são ignorados e retornados em `ignored_fields`.
 
 Resposta de `/analyze` inclui:
 
@@ -282,26 +282,26 @@ Resposta de `/analyze` inclui:
 - mapeamento da falha;
 - eventos similares;
 - chunks recuperados;
-- decisao dos guardrails;
-- validacao simples de citacao;
+- decisão dos guardrails;
+- validação simples de citação;
 - resposta final.
 
-## Limitacoes
+## Limitações
 
-- `Doc1.pdf` e `Doc7.pdf` sao PDFs de imagem. Sem OCR instalado, eles nao entram no indice textual.
-- O indice vetorial e local e simples, adequado para demo, nao para escala industrial.
-- Os thresholds foram calibrados para este conjunto de dados e devem ser avaliados em producao.
-- A validacao da resposta e simples; ela verifica citacao de documentos, mas nao avalia exatidao tecnica automaticamente.
-- O sistema nao substitui validacao de uma equipe de manutencao.
+- `Doc1.pdf` e `Doc7.pdf` são PDFs de imagem. Sem OCR instalado, eles não entram no índice textual.
+- O índice vetorial é local e simples, adequado para demo, não para escala industrial.
+- Os thresholds foram calibrados para este conjunto de dados e devem ser avaliados em produção.
+- A validação da resposta é simples; ela verifica citação de documentos, mas não avalia exatidão técnica automaticamente.
+- O sistema não substitui validação de uma equipe de manutenção.
 
 ## Melhorias Futuras
 
-- RAG hibrido com busca lexical e vetorial.
+- RAG híbrido com busca lexical e vetorial.
 - Reranking dos chunks recuperados.
 - Banco vetorial dedicado.
 - Graph RAG para relacionar falhas, sintomas, ativos e procedimentos.
-- LangChain ou LangGraph para orquestracao com estados.
-- Avaliacao automatica de respostas.
+- LangChain ou LangGraph para orquestração com estados.
+- Avaliação automática de respostas.
 - OCR robusto e pipeline de qualidade documental.
-- Integracao com banco industrial real.
-- Monitoramento de respostas, latencia e cobertura documental em producao.
+- Integração com banco industrial real.
+- Monitoramento de respostas, latência e cobertura documental em produção.

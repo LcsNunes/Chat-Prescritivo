@@ -35,34 +35,34 @@ def evaluate_guardrails(
         return {
             "allowed": False,
             "reason": "operational_state",
-            "message": "O evento foi classificado como estado operacional, nao como falha.",
+            "message": "O evento foi classificado como estado operacional, não como falha.",
         }
 
     if not fault_mapping.has_documentation:
         return {
             "allowed": False,
             "reason": "missing_documentation",
-            "message": "Nao existe documento tecnico cadastrado para a classe de falha identificada.",
+            "message": "Não existe documento técnico cadastrado para a classe de falha identificada.",
         }
 
     if not has_document_coverage(fault_mapping, retrieved_chunks):
         return {
             "allowed": False,
             "reason": "missing_related_chunks",
-            "message": "Nao foram recuperados chunks do documento relacionado a falha.",
+            "message": "Não foram recuperados chunks do documento relacionado à falha.",
         }
 
     if not is_retrieval_confident(retrieved_chunks, min_chunk_score):
         return {
             "allowed": False,
             "reason": "low_retrieval_score",
-            "message": "A similaridade dos chunks recuperados ficou abaixo do minimo configurado.",
+            "message": "A similaridade dos chunks recuperados ficou abaixo do mínimo configurado.",
         }
 
     return {
         "allowed": True,
         "reason": "approved",
-        "message": "Ha cobertura documental suficiente para sintetizar a resposta com LLM.",
+        "message": "Há cobertura documental suficiente para sintetizar a resposta com LLM.",
     }
 
 
@@ -73,23 +73,23 @@ def build_undocumented_response(
     if guardrail_decision.get("reason") == "operational_state":
         return (
             "Tipo de evento identificado: Estado operacional sem falha\n\n"
-            "O registro foi classificado como uma condicao operacional, nao como um defeito de manutencao.\n\n"
-            "Por seguranca, o sistema nao ira gerar um procedimento corretivo para este evento.\n\n"
-            "Recomendacao:\n"
-            "- Verificar se o estado operacional esta coerente com o contexto da maquina.\n"
-            "- Caso haja sintomas reais de falha, registrar um novo evento com descricao tecnica mais especifica."
+            "O registro foi classificado como uma condição operacional, não como um defeito de manutenção.\n\n"
+            "Por segurança, o sistema não irá gerar um procedimento corretivo para este evento.\n\n"
+            "Recomendação:\n"
+            "- Verificar se o estado operacional está coerente com o contexto da máquina.\n"
+            "- Caso haja sintomas reais de falha, registrar um novo evento com descrição técnica mais específica."
         )
 
     return (
-        "Nao foi encontrada documentacao tecnica suficiente para orientar a correcao deste tipo de falha.\n\n"
-        "Por seguranca, o sistema nao ira gerar um procedimento prescritivo sem base documental.\n\n"
+        "Não foi encontrada documentação técnica suficiente para orientar a correção deste tipo de falha.\n\n"
+        "Por segurança, o sistema não irá gerar um procedimento prescritivo sem base documental.\n\n"
         f"Falha identificada: {fault_mapping.display_name}\n"
         f"Classe normalizada: {fault_mapping.fault_normalized}\n"
         f"Motivo do bloqueio: {guardrail_decision.get('message')}\n\n"
-        "Recomendacao:\n"
-        "Cadastrar um novo documento orientativo de manutencao para essa falha, contendo sintomas, "
-        "diagnostico, ferramentas necessarias, procedimento de correcao, criterios de aceitacao e "
-        "recomendacoes preventivas."
+        "Recomendação:\n"
+        "Cadastrar um novo documento orientativo de manutenção para essa falha, contendo sintomas, "
+        "diagnóstico, ferramentas necessárias, procedimento de correção, critérios de aceitação e "
+        "recomendações preventivas."
     )
 
 
@@ -102,4 +102,3 @@ def validate_llm_answer(answer: str, retrieved_chunks: list[dict[str, Any]]) -> 
         "documents": documents,
         "cited_documents": cited_documents,
     }
-

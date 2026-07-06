@@ -1,8 +1,8 @@
 const titleByView = {
   dashboard: "Dashboard",
-  analyze: "Analise tecnica",
-  chat: "Chat tecnico",
-  documents: "Documentos tecnicos",
+  analyze: "Análise técnica",
+  chat: "Chat técnico",
+  documents: "Documentos técnicos",
 };
 
 const toast = document.querySelector("#toast");
@@ -52,7 +52,7 @@ function markdownToHtml(value) {
 }
 
 function scoreLabel(score) {
-  if (score === null || score === undefined) return "nao informado";
+  if (score === null || score === undefined) return "não informado";
   return `${(Number(score) * 100).toFixed(1)}%`;
 }
 
@@ -105,19 +105,19 @@ function renderAnalyzeResult(data) {
   const diagnosisHtml =
     sectionHtml(sections, [
       "tipo de falha",
-      "evidencias",
-      "diagnostico provavel",
-      "limitacoes",
+      "evidências",
+      "diagnóstico provável",
+      "limitações",
     ]) || markdownToHtml(data.answer || "");
 
   const recommendationHtml =
-    sectionHtml(sections, ["acoes recomendadas", "cuidados de seguranca"]) ||
+    sectionHtml(sections, ["ações recomendadas", "cuidados de segurança"]) ||
     markdownToHtml(data.answer || "");
 
   const commonFaults = (similar.common_faults || [])
     .map(
       (item) =>
-        `<li><strong>${escapeHtml(item.fault_normalized)}</strong><small>${escapeHtml(item.count)} ocorrencia(s)</small></li>`
+        `<li><strong>${escapeHtml(item.fault_normalized)}</strong><small>${escapeHtml(item.count)} ocorrência(s)</small></li>`
     )
     .join("");
 
@@ -135,7 +135,7 @@ function renderAnalyzeResult(data) {
     .map(
       (chunk) => `
         <li>
-          <strong>${escapeHtml(chunk.document)} - pagina ${escapeHtml(chunk.page)} - score ${scoreLabel(chunk.score)}</strong>
+          <strong>${escapeHtml(chunk.document)} - página ${escapeHtml(chunk.page)} - score ${scoreLabel(chunk.score)}</strong>
           <small>${escapeHtml(chunk.text_preview)}</small>
         </li>`
     )
@@ -151,7 +151,7 @@ function renderAnalyzeResult(data) {
         <div class="fact-grid">
           <div class="fact"><b>Falha original</b><span>${escapeHtml(mapping.fault_raw)}</span></div>
           <div class="fact"><b>Falha normalizada</b><span>${escapeHtml(mapping.fault_normalized)}</span></div>
-          <div class="fact"><b>Classe canonica</b><span>${escapeHtml(mapping.display_name)}</span></div>
+          <div class="fact"><b>Classe canônica</b><span>${escapeHtml(mapping.display_name)}</span></div>
           <div class="fact"><b>Similaridade</b><span>${scoreLabel(mapping.score)} - ${escapeHtml(mapping.confidence)}</span></div>
         </div>
         <p><span class="pill ${guardrailClass}">${guardrailText}</span></p>
@@ -159,24 +159,24 @@ function renderAnalyzeResult(data) {
       </article>
 
       <article class="result-card">
-        <h3>Historicos recentes</h3>
+        <h3>Históricos recentes</h3>
         <div class="fact-grid">
           <div class="fact"><b>Eventos similares</b><span>${escapeHtml(similar.count || 0)}</span></div>
           <div class="fact"><b>Periodo</b><span>${escapeHtml(formatPeriod(similar.period))}</span></div>
         </div>
         <h3 class="small-title">Falhas comuns</h3>
         <ul class="compact-list">${commonFaults || "<li>Nenhuma falha comum retornada.</li>"}</ul>
-        <h3 class="small-title">Exemplos proximos</h3>
+        <h3 class="small-title">Exemplos próximos</h3>
         <ul class="compact-list">${examples || "<li>Nenhum exemplo retornado.</li>"}</ul>
       </article>
 
       <article class="result-card wide">
-        <h3>Recomendacoes</h3>
+        <h3>Recomendações</h3>
         <div class="answer-text">${recommendationHtml}</div>
       </article>
 
       <article class="result-card">
-        <h3>Diagnostico e evidencias</h3>
+        <h3>Diagnóstico e evidências</h3>
         <div class="answer-text">${diagnosisHtml}</div>
       </article>
 
@@ -186,7 +186,7 @@ function renderAnalyzeResult(data) {
       </article>
 
       <article class="result-card wide">
-        <h3>JSON tecnico</h3>
+        <h3>JSON técnico</h3>
         <details class="raw-details">
           <summary>Mostrar resposta completa da API</summary>
           <pre class="code-output">${escapeHtml(pretty(data))}</pre>
@@ -200,7 +200,7 @@ async function apiJson(url, options = {}) {
   const response = await fetch(url, options);
   const data = await response.json();
   if (!response.ok) {
-    const message = data.detail || "Falha na requisicao.";
+    const message = data.detail || "Falha na requisição.";
     throw new Error(typeof message === "string" ? message : pretty(message));
   }
   return data;
@@ -215,7 +215,7 @@ async function loadHealth() {
     cards.innerHTML = `
       <div class="metric"><b>${data.status}</b><span>API</span></div>
       <div class="metric"><b>${data.ollama.ok ? "online" : "offline"}</b><span>Ollama</span></div>
-      <div class="metric"><b>${data.index_loaded ? "carregado" : "lazy"}</b><span>Indice RAG</span></div>
+      <div class="metric"><b>${data.index_loaded ? "carregado" : "lazy"}</b><span>Índice RAG</span></div>
     `;
     output.textContent = pretty(data);
   } catch (error) {
@@ -341,7 +341,7 @@ async function loadDocuments() {
       row.innerHTML = `
         <div>
           <strong>${doc.document}</strong>
-          <small>${doc.pages || 0} paginas | ${doc.image_pages || 0} com imagens | ${doc.ocr_pages || 0} com OCR | ${doc.ocr_unavailable_pages || 0} sem OCR disponivel | ${doc.characters || 0} caracteres | ${methods}</small>
+          <small>${doc.pages || 0} páginas | ${doc.image_pages || 0} com imagens | ${doc.ocr_pages || 0} com OCR | ${doc.ocr_unavailable_pages || 0} sem OCR disponível | ${doc.characters || 0} caracteres | ${methods}</small>
         </div>
         <button class="danger" data-delete="${doc.document}">Deletar</button>
       `;
@@ -370,7 +370,7 @@ async function uploadDocument(event) {
       body: form,
     });
     fileInput.value = "";
-    showToast("Documento adicionado. Indice RAG sera recriado na proxima consulta.");
+    showToast("Documento adicionado. Índice RAG será recriado na próxima consulta.");
     await loadDocuments();
   } catch (error) {
     showToast(String(error));
@@ -381,7 +381,7 @@ async function deleteDocument(filename) {
   if (!window.confirm(`Deletar ${filename}?`)) return;
   try {
     await apiJson(`/documents/${encodeURIComponent(filename)}`, { method: "DELETE" });
-    showToast("Documento removido. Indice RAG sera recriado na proxima consulta.");
+    showToast("Documento removido. Índice RAG será recriado na próxima consulta.");
     await loadDocuments();
   } catch (error) {
     showToast(String(error));

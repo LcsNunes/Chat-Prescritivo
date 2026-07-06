@@ -6,48 +6,50 @@ from typing import Any
 from src.fault_mapping import FaultMappingResult
 
 
-SYSTEM_PROMPT = """Voce e um assistente tecnico de manutencao prescritiva industrial.
+SYSTEM_PROMPT = """Você é um assistente técnico de manutenção prescritiva industrial.
 
-Sua tarefa e analisar eventos de sensores, historico de ocorrencias e documentos tecnicos recuperados por RAG para sugerir acoes de inspecao, diagnostico e correcao.
+Sua tarefa é analisar eventos de sensores, histórico de ocorrências e documentos técnicos recuperados por RAG para sugerir ações de inspeção, diagnóstico e correção.
 
-Regras obrigatorias:
-1. Responda somente com base nos documentos tecnicos fornecidos no contexto.
-2. Nao invente procedimentos, causas, ferramentas ou criterios de aceitacao.
-3. Se os documentos recuperados nao cobrirem a falha, informe que nao existe documentacao suficiente para orientar a correcao.
-4. Sempre destaque quais documentos ou trechos sustentam a resposta.
-5. Diferencie diagnostico provavel de acao corretiva recomendada.
-6. Quando houver incerteza, declare a incerteza.
-7. A resposta deve ser objetiva, tecnica e util para uma equipe de manutencao.
+Regras obrigatórias:
+1. Responda em português do Brasil, com acentuação, gramática e termos técnicos corretos.
+2. Responda somente com base nos documentos técnicos fornecidos no contexto.
+3. Não invente procedimentos, causas, ferramentas ou critérios de aceitação.
+4. Se os documentos recuperados não cobrirem a falha, informe que não existe documentação suficiente para orientar a correção.
+5. Sempre destaque quais documentos ou trechos sustentam a resposta.
+6. Diferencie diagnóstico provável de ação corretiva recomendada.
+7. Quando houver incerteza, declare a incerteza.
+8. A resposta deve ser objetiva, técnica e útil para uma equipe de manutenção.
 
 Formato esperado:
 - Tipo de falha identificado
-- Evidencias nos dados
-- Eventos historicos similares
+- Evidências nos dados
+- Eventos históricos similares
 - Documentos consultados
-- Diagnostico provavel
-- Acoes recomendadas
-- Cuidados de seguranca
-- Limitacoes ou necessidade de novo documento
+- Diagnóstico provável
+- Ações recomendadas
+- Cuidados de segurança
+- Limitações ou necessidade de novo documento
 """
 
 
-CHAT_SYSTEM_PROMPT = """Voce e um assistente tecnico de manutencao prescritiva industrial.
+CHAT_SYSTEM_PROMPT = """Você é um assistente técnico de manutenção prescritiva industrial.
 
-Responda perguntas em linguagem natural usando somente os documentos tecnicos recuperados por RAG.
+Responda perguntas em linguagem natural usando somente os documentos técnicos recuperados por RAG.
 
-Regras obrigatorias:
+Regras obrigatórias:
 1. Responda somente com base nos trechos fornecidos.
-2. Nao infira causas, sintomas, ferramentas, riscos ou procedimentos que nao estejam escritos nos trechos.
-3. Se o documento for curto ou incompleto, diga exatamente que a documentacao disponivel e limitada.
-4. Cite os documentos consultados.
-5. Para perguntas do tipo "tem documento?", responda primeiro se ha ou nao documentacao recuperada.
-6. Se nao houver documentacao suficiente, recomende cadastrar ou complementar o documento tecnico.
+2. Responda em português do Brasil, com acentuação, gramática e termos técnicos corretos.
+3. Não infira causas, sintomas, ferramentas, riscos ou procedimentos que não estejam escritos nos trechos.
+4. Se o documento for curto ou incompleto, diga exatamente que a documentação disponível é limitada.
+5. Cite os documentos consultados.
+6. Para perguntas do tipo "tem documento?", responda primeiro se há ou não documentação recuperada.
+7. Se não houver documentação suficiente, recomende cadastrar ou complementar o documento técnico.
 
 Formato esperado:
 - Resposta direta
 - Documentos consultados
-- Orientacao permitida pelos documentos
-- Limitacoes
+- Orientação permitida pelos documentos
+- Limitações
 """
 
 
@@ -61,7 +63,7 @@ def format_retrieved_chunks(chunks: list[dict[str, Any]]) -> str:
         formatted.append(
             "\n".join(
                 [
-                    f"Fonte: {chunk['document']} | pagina {chunk['page']} | chunk {chunk['chunk_index']} | score {chunk.get('score', 0):.3f}",
+                    f"Fonte: {chunk['document']} | página {chunk['page']} | chunk {chunk['chunk_index']} | score {chunk.get('score', 0):.3f}",
                     chunk["text"],
                 ]
             )
@@ -75,7 +77,7 @@ def build_rag_messages(
     similar_events: dict[str, Any],
     retrieved_chunks: list[dict[str, Any]],
 ) -> list[dict[str, str]]:
-    user_prompt = f"""Analise o evento de manutencao abaixo e gere uma resposta prescritiva somente com base nos documentos recuperados.
+    user_prompt = f"""Analise o evento de manutenção abaixo e gere uma resposta prescritiva somente com base nos documentos recuperados.
 
 Dados do evento:
 {_json_block(event)}
@@ -83,17 +85,18 @@ Dados do evento:
 Mapeamento da falha:
 {_json_block(fault_mapping.__dict__)}
 
-Resumo de eventos historicos similares:
+Resumo de eventos históricos similares:
 {_json_block(similar_events)}
 
-Documentos tecnicos recuperados por RAG:
+Documentos técnicos recuperados por RAG:
 {format_retrieved_chunks(retrieved_chunks)}
 
-Instrucoes finais:
+Instruções finais:
 - Use apenas os documentos recuperados.
 - Cite explicitamente os documentos consultados.
-- Se alguma informacao nao estiver nos documentos, declare a limitacao.
-- Nao inclua conhecimento externo ou procedimento nao documentado.
+- Escreva em português do Brasil, com acentuação e gramática corretas.
+- Se alguma informação não estiver nos documentos, declare a limitação.
+- Não inclua conhecimento externo ou procedimento não documentado.
 """
 
     return [
@@ -109,20 +112,20 @@ def build_chat_messages(
 ) -> list[dict[str, str]]:
     user_prompt = f"""Responda a pergunta em linguagem natural usando somente os documentos recuperados.
 
-Pergunta do usuario:
+Pergunta do usuário:
 {question}
 
-Mapeamento semantico da pergunta:
+Mapeamento semântico da pergunta:
 {_json_block(fault_mapping.__dict__)}
 
-Documentos tecnicos recuperados por RAG:
+Documentos técnicos recuperados por RAG:
 {format_retrieved_chunks(retrieved_chunks)}
 
-Instrucoes finais:
-- Responda de forma direta e tecnica.
+Instruções finais:
+- Responda de forma direta e técnica, em português do Brasil correto.
 - Cite os documentos consultados.
-- Se os documentos nao cobrirem a pergunta, diga que nao ha documentacao suficiente.
-- Nao crie procedimentos fora do contexto recuperado.
+- Se os documentos não cobrirem a pergunta, diga que não há documentação suficiente.
+- Não crie procedimentos fora do contexto recuperado.
 """
 
     return [
