@@ -12,15 +12,50 @@ Se a falha não possuir documentação suficiente, o sistema bloqueia a prescri�
 
 ## Como Executar
 
-Pré-requisitos:
+Pré-requisitos gerais:
 
-- Python 3.10+
 - Ollama rodando em `http://localhost:11434`
-- PostgreSQL opcional para persistir novos eventos operacionais
-- Tesseract OCR, caso deseje extrair texto de imagens dentro dos PDFs
 - Modelos locais:
   - `qwen3:8b`
   - `qwen3-embedding:4b`
+- Docker Desktop, caso execute a aplicação com Docker
+
+Baixe os modelos, se ainda não estiverem disponíveis:
+
+```bash
+ollama pull qwen3:8b
+ollama pull qwen3-embedding:4b
+```
+
+### Execução com Docker
+
+Este modo sobe a API FastAPI, o frontend, o OCR/Tesseract e o PostgreSQL.
+
+```bash
+docker compose up --build
+```
+
+Em segundo plano:
+
+```bash
+docker compose up -d --build
+```
+
+No Docker, a aplicação usa:
+
+- PostgreSQL em `postgres:5432`;
+- Ollama da máquina host em `http://host.docker.internal:11434`;
+- `./data` montado em `/app/data`;
+- `./cache` montado em `/app/cache`.
+
+A imagem Docker não inclui os modelos do Ollama. Os modelos continuam rodando fora do container para evitar uma imagem pesada.
+
+### Execução local com Python
+
+Pré-requisitos adicionais:
+
+- Python 3.10+
+- Tesseract OCR, caso deseje extrair texto de imagens dentro dos PDFs sem Docker
 
 Instalação:
 
@@ -34,7 +69,7 @@ Execução:
 uvicorn src.app:app --reload
 ```
 
-PostgreSQL local opcional:
+PostgreSQL local opcional para execução sem containerizar a API:
 
 ```bash
 docker compose up -d postgres
@@ -92,6 +127,11 @@ Frontend:
 - `frontend/index.html`
 - `frontend/styles.css`
 - `frontend/app.js`
+
+Infraestrutura:
+
+- `Dockerfile`: imagem da aplicação FastAPI com OCR.
+- `docker-compose.yml`: orquestra aplicação e PostgreSQL para demo local.
 
 O backend serve os arquivos estáticos em `/assets`, mas o código da interface não fica misturado ao código Python.
 

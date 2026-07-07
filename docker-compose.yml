@@ -1,4 +1,36 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chat-prescritivo-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      LLM_MODEL: qwen3:8b
+      EMBEDDING_MODEL: qwen3-embedding:4b
+      FALLBACK_LLM_MODEL: qwen3:4b
+      DATA_PATH: data/banner.csv
+      DOCS_PATH: data/docs
+      CACHE_PATH: cache
+      DATABASE_URL: postgresql://chat_prescritivo:chat_prescritivo@postgres:5432/chat_prescritivo
+      EVENTS_TABLE: maintenance_events
+      POSTGRES_SEED_FROM_CSV: "true"
+      MIN_FAULT_SIMILARITY: "0.55"
+      MIN_CHUNK_SIMILARITY: "0.50"
+      TOP_K_CHUNKS: "5"
+      SIMILAR_EVENTS_LIMIT: "5"
+      ENABLE_OCR: "true"
+      OCR_STRATEGY: auto
+      OCR_LANG: por+eng
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache
+
   postgres:
     image: postgres:16-alpine
     container_name: chat-prescritivo-postgres
